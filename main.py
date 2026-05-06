@@ -18,7 +18,6 @@ from typing import Any
 
 import pandas as pd
 
-from biometeo_engine import calculate_biometeo_outputs
 from bmkg_client import fetch_all_unique_villages
 from classification import classify_pet
 from config import Settings, load_settings
@@ -362,6 +361,10 @@ def main(argv: list[str] | None = None) -> int:
         log.info("Menulis preprocessed_data.csv (%s baris valid)", len(pre_df))
 
         bio_rows: list[dict[str, Any]] = []
+        # Lazy import agar unit test / tooling bisa import main.py tanpa biometeo terpasang.
+        # Pipeline produksi tetap akan gagal lebih awal saat benar-benar membutuhkan biometeo.
+        from biometeo_engine import calculate_biometeo_outputs  # noqa: WPS433
+
         for pr in preprocessed:
             try:
                 bio = calculate_biometeo_outputs(pr)

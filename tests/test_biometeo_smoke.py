@@ -19,7 +19,7 @@ pytestmark = [pytest.mark.biometeo_smoke]
 
 
 def test_tmrt_and_pet_finite():
-    import biometeo
+    biometeo = pytest.importorskip("biometeo")
 
     from biometeo_engine import extract_pet, extract_tmrt_vp
 
