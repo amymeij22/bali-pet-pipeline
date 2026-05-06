@@ -46,6 +46,7 @@ def _get_optional_forecast_columns(cur) -> set[str]:
 @dataclass
 class ForecastRowDB:
     kdepum_code: str
+    destination_name: str
     forecast_time: str
     temperature: float
     humidity: float
@@ -108,17 +109,33 @@ def import_forecast_batch(
         cur.execute("SELECT kdepum_code, id FROM public.villages")
         v_map = {r[0]: r[1] for r in cur.fetchall()}
 
+        # (kdepum_code, destination_name) -> destination_id
+        cur.execute(
+            """
+            SELECT v.kdepum_code, d.destination_name, d.id
+            FROM public.destinations d
+            JOIN public.villages v ON v.id = d.village_id
+            """
+        )
+        d_map = {(r[0], r[1]): r[2] for r in cur.fetchall()}
+
         cur.execute("SELECT category_key, id FROM public.thermal_categories")
         t_map = {r[0]: r[1] for r in cur.fetchall()}
 
         tuples: list[tuple[Any, ...]] = []
         missing_v = set()
+        missing_d = set()
         missing_c = set()
 
         for r in rows:
             vid = v_map.get(r.kdepum_code)
             if not vid:
                 missing_v.add(r.kdepum_code)
+                continue
+
+            did = d_map.get((r.kdepum_code, r.destination_name))
+            if not did:
+                missing_d.add((r.kdepum_code, r.destination_name))
                 continue
             tid = t_map.get(r.temperate_category_key) if r.temperate_category_key else None
             sid = t_map.get(r.sub_tropic_category_key) if r.sub_tropic_category_key else None
@@ -128,7 +145,7 @@ def import_forecast_batch(
                 missing_c.add(r.sub_tropic_category_key)
 
             base = (
-                vid,
+                did,
                 batch_id,
                 r.forecast_time,
                 r.temperature,
@@ -155,6 +172,10 @@ def import_forecast_batch(
 
         if missing_v:
             log.error("kdepum_code tidak ada di tabel villages (contoh): %s", list(missing_v)[:5])
+        if missing_d:
+            log.error(
+                "destinasi tidak ada di tabel destinations untuk kdepum_code tsb (contoh): %s", list(missing_d)[:5]
+            )
         if missing_c:
             log.error("category_key tidak ada di thermal_categories (contoh): %s", list(missing_c)[:5])
 
@@ -163,14 +184,14 @@ def import_forecast_batch(
             log.error("Tidak ada tuple valid untuk insert; rollback")
             return 0
 
-        # dedupe key (village, batch, time)
+        # dedupe key (destination, batch, time)
         dedup: dict[tuple[Any, Any, Any], tuple[Any, ...]] = {}
         for t in tuples:
             dedup[(t[0], t[1], t[2])] = t
         tuples = list(dedup.values())
 
         base_cols = [
-            "village_id",
+            "destination_id",
             "batch_id",
             "forecast_time",
             "temperature",
@@ -212,7 +233,7 @@ def import_forecast_batch(
         query = f"""
             INSERT INTO public.weather_forecasts ({", ".join(col_list)})
             VALUES %s
-            ON CONFLICT (village_id, batch_id, forecast_time)
+            ON CONFLICT (destination_id, batch_id, forecast_time)
             DO UPDATE SET {", ".join(set_lines)}
         """
 

@@ -46,6 +46,12 @@ Opsi CLI:
 Perilaku output folder:
 - Nama folder run selalu `pet_analysis_<timestamp>` di bawah `OUTPUT_PARENT_DIR` **(dev)**.
 - **(prod + KEEP_LOCAL_ARTIFACTS=false)**: folder run ditulis di temporary dir dan tidak menetap di filesystem container (diarsipkan di Storage).
+Artefak output (standar, selalu sama):
+- `raw_data.csv`
+- `processed_data.csv`
+- `final_forecast_data.csv`
+- `run_summary.json`
+- File error jika ada: `failed_rows.csv`, `failed_villages.csv`
 
 Exit code:
 - `0` sukses

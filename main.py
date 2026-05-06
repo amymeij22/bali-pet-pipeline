@@ -135,28 +135,29 @@ def build_grp_and_exports(
         vs = _series_val(row, "vs_text", default="")
         tcc = _series_val(row, "tcc", "cloud_cover_percent")
 
-        if include_db_rows:
-            db_rows.append(
-                ForecastRowDB(
-                    kdepum_code=kdep,
-                    forecast_time=str(row["utc_datetime"]),
-                    temperature=float(t_val),
-                    humidity=float(hu_val),
-                    wind_speed_kmh=float(ws_val),
-                    wind_direction=str(wd_val),
-                    weather_condition=str(wdesc),
-                    visibility=str(vs),
-                    pet_value=pet_val,
-                    temperate_category_key=ct,
-                    sub_tropic_category_key=cs,
-                    cloud_cover=float(row["cloud_cover_percent"]),
-                    tmrt=tmrt,
-                    vapor_pressure=vp,
-                    wind_speed_1_1m=float(row["wind_speed_1_1m_ms"]),
-                )
-            )
-
         for dest in dests:
+            if include_db_rows:
+                db_rows.append(
+                    ForecastRowDB(
+                        kdepum_code=kdep,
+                        destination_name=dest,
+                        forecast_time=str(row["utc_datetime"]),
+                        temperature=float(t_val),
+                        humidity=float(hu_val),
+                        wind_speed_kmh=float(ws_val),
+                        wind_direction=str(wd_val),
+                        weather_condition=str(wdesc),
+                        visibility=str(vs),
+                        pet_value=pet_val,
+                        temperate_category_key=ct,
+                        sub_tropic_category_key=cs,
+                        cloud_cover=float(row["cloud_cover_percent"]),
+                        tmrt=tmrt,
+                        vapor_pressure=vp,
+                        wind_speed_1_1m=float(row["wind_speed_1_1m_ms"]),
+                    )
+                )
+
             raw_one: dict[str, Any] = {
                 "lokasi_wisata": dest,
                 "kdepum_code": kdep,
@@ -326,9 +327,6 @@ def main(argv: list[str] | None = None) -> int:
 
     def _run_in_dir(run_dir: str) -> int:
         raw_df = pd.DataFrame(fetch.raw_records)
-        raw_path = os.path.join(run_dir, "raw_bmkg_data.csv")
-        raw_df.to_csv(raw_path, index=False)
-        log.info("Menulis %s (%s baris)", raw_path, len(raw_df))
 
         preprocessed: list[dict[str, Any]] = []
         failed_rows: list[dict[str, Any]] = []
@@ -357,8 +355,6 @@ def main(argv: list[str] | None = None) -> int:
                 preprocessed.append(pr)
 
         pre_df = pd.DataFrame(preprocessed)
-        pre_df.to_csv(os.path.join(run_dir, "preprocessed_data.csv"), index=False)
-        log.info("Menulis preprocessed_data.csv (%s baris valid)", len(pre_df))
 
         bio_rows: list[dict[str, Any]] = []
         # Lazy import agar unit test / tooling bisa import main.py tanpa biometeo terpasang.
@@ -373,8 +369,6 @@ def main(argv: list[str] | None = None) -> int:
                 failed_rows.append({**pr, "error": f"biometeo:{e}"})
 
         bio_df = pd.DataFrame(bio_rows)
-        bio_df.to_csv(os.path.join(run_dir, "biometeo_results.csv"), index=False)
-        log.info("Menulis biometeo_results.csv (%s baris)", len(bio_df))
 
         if failed_rows:
             pd.DataFrame(failed_rows).to_csv(os.path.join(run_dir, "failed_rows.csv"), index=False)
@@ -403,23 +397,19 @@ def main(argv: list[str] | None = None) -> int:
                 json.dump(summary, f, indent=2, ensure_ascii=False)
             return 4
 
-        # Untuk arsip CSV: simpan per destinasi (sudah diekspansi).
-        # Untuk DB: tetap per desa×waktu (dedupe dengan first()).
-        grp_db = bio_df.groupby(["kdepum_code", "utc_datetime"], as_index=False).first()
-        db_rows, _, _, _, _ = build_grp_and_exports(grp_db, kdep_to_dests, produced_at)
+        # Untuk DB: simpan per destinasi×waktu (bio_df sudah diekspansi per destinasi).
+        db_rows, _, _, _, _ = build_grp_and_exports(bio_df, kdep_to_dests, produced_at)
         _, raw_legacy_df, proc_df, class_df, final_df = build_grp_and_exports(
             bio_df, kdep_to_dests, produced_at, include_db_rows=False
         )
 
+        # Output standar (selalu): 3 CSV inti + file error bila ada
         raw_legacy_df.to_csv(os.path.join(run_dir, "raw_data.csv"), index=False)
         proc_df.to_csv(os.path.join(run_dir, "processed_data.csv"), index=False)
-        class_df.to_csv(os.path.join(run_dir, "pet_classification.csv"), index=False)
         final_df.to_csv(os.path.join(run_dir, "final_forecast_data.csv"), index=False)
-        log.info(
-            "Arsip selaras pipeline lama: raw_data.csv, processed_data.csv, pet_classification.csv, final_forecast_data.csv"
-        )
+        log.info("Arsip standar: raw_data.csv, processed_data.csv, final_forecast_data.csv")
 
-        times = [str(x) for x in grp_db["utc_datetime"].dropna().tolist()]
+        times = [str(x) for x in bio_df["utc_datetime"].dropna().tolist()]
         f_start = fetch.forecast_start or (min(times) if times else "")
         f_end = fetch.forecast_end or (max(times) if times else "")
 
