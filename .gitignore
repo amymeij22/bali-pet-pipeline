@@ -1,0 +1,27 @@
+.env
+.env.*
+!.env.example
+
+# Python runtime / caches
+.venv/
+__pycache__/
+*.py[cod]
+
+# Test/quality caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Output artifacts (run folders written by main.py)
+pet_analysis/
+pet_analysis_*/
+
+# Temporary folders (used in prod when KEEP_LOCAL_ARTIFACTS=false)
+pet_analysis_tmp/
+*/pet_analysis_tmp/
+
+# OS noise
+.DS_Store

@@ -1,0 +1,9 @@
+biometeo
+pandas
+numpy
+requests
+psycopg2-binary
+python-dotenv
+boto3
+botocore
+pytest
