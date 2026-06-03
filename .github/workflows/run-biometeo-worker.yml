@@ -1,0 +1,75 @@
+name: Run Biometeo Worker
+
+on:
+  workflow_dispatch:
+    inputs:
+      slot:
+        description: "Pipeline slot"
+        required: true
+        type: choice
+        options:
+          - morning
+          - evening
+          - manual
+
+concurrency:
+  group: biometeo-worker-${{ github.event.inputs.slot }}
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    defaults:
+      run:
+        shell: pwsh
+
+    env:
+      PYTHONPATH: ${{ github.workspace }}\src
+      RUN_ENV: production
+      RUN_SLOT: ${{ github.event.inputs.slot }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Upgrade pip
+        run: |
+          python -m pip install --upgrade pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Smoke test biometeo
+        run: |
+          python -c "import biometeo; print('biometeo import OK')"
+
+      - name: Run tests
+        run: |
+          pytest
+        continue-on-error: false
+
+      - name: Run biometeo pipeline
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BMKG_API_KEY: ${{ secrets.BMKG_API_KEY }}
+        run: |
+          python -m biometeo_worker.main --slot "${{ github.event.inputs.slot }}"
+
+      - name: Upload reports artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: biometeo-reports-${{ github.event.inputs.slot }}
+          path: reports/**
+          if-no-files-found: ignore
+          retention-days: 7
