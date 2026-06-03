@@ -30,3 +30,8 @@ Thumbs.db
 # IDEs
 .vscode/
 .idea/
+
+# Local run outputs
+pet_analysis/
+pet_analysis_*/
+
