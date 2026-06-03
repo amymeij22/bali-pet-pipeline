@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 pytestmark = [pytest.mark.biometeo_smoke]
 
@@ -21,7 +21,7 @@ pytestmark = [pytest.mark.biometeo_smoke]
 def test_tmrt_and_pet_finite():
     biometeo = pytest.importorskip("biometeo")
 
-    from biometeo_engine import extract_pet, extract_tmrt_vp
+    from biometeo_worker.biometeo_engine import extract_pet, extract_tmrt_vp
 
     tmrt_res = biometeo.Tmrt_calc(
         Ta=25.0,

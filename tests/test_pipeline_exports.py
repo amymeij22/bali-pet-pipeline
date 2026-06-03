@@ -3,10 +3,10 @@ from pathlib import Path
 
 import pandas as pd
 
-# Agar import modul di folder induk `cloudrun/` berfungsi saat pytest dari root/repo
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+# Agar import modul di folder induk `src/` berfungsi saat pytest dari root/repo
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from main import build_grp_and_exports
+from biometeo_worker.main import build_grp_and_exports
 
 
 def test_build_grp_and_exports_destination_name_in_row_overrides_mapping():

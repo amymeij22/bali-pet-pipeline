@@ -3,12 +3,11 @@ from pathlib import Path
 
 import pytest
 
-# Agar import modul di folder induk `cloudrun/` berfungsi saat pytest dari root/repo
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+# Agar import modul di folder induk `src/` berfungsi saat pytest dari root/repo
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from config import load_settings
-
-from main import validate_runtime_settings
+from biometeo_worker.config import load_settings
+from biometeo_worker.main import validate_runtime_settings
 
 
 def test_load_settings_defaults_dev(monkeypatch: pytest.MonkeyPatch):

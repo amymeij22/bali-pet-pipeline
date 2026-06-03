@@ -2,7 +2,7 @@ import math
 
 import pytest
 
-from classification import classify_pet
+from biometeo_worker.classification import classify_pet
 
 
 def test_temperate_boundaries():

@@ -3,10 +3,10 @@ import pytest
 import sys
 from pathlib import Path
 
-# Agar import modul di folder induk `cloudrun/` berfungsi saat pytest dari root/repo
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+# Agar import modul di folder induk `src/` berfungsi saat pytest dari root/repo
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from preprocessing import cloud_percent_to_oktas, preprocess_bmkg_record, ws_kmh_to_ms_10m
+from biometeo_worker.preprocessing import cloud_percent_to_oktas, preprocess_bmkg_record, ws_kmh_to_ms_10m
 
 
 def test_ws_kmh_to_ms_10m():

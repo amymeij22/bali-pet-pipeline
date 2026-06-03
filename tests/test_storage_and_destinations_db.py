@@ -3,11 +3,11 @@ from pathlib import Path
 
 import pytest
 
-# Agar import modul di folder induk `cloudrun/` berfungsi saat pytest dari root/repo
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+# Agar import modul di folder induk `src/` berfungsi saat pytest dari root/repo
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from destinations_source_db import validate_destination_configs
-from storage import _content_type
+from biometeo_worker.destinations_source_db import validate_destination_configs
+from biometeo_worker.storage import _content_type
 
 
 def test_storage_content_type():
