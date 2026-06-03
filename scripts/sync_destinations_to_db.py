@@ -22,11 +22,11 @@ from dataclasses import dataclass
 # Agar bisa dijalankan langsung:
 # `python scripts/sync_destinations_to_db.py`
 if __name__ == "__main__" and (__package__ is None or __package__ == ""):
-    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
-from database import connect
-from destinations import DESTINATIONS, DestinationConfig
-from logger import get_logger, setup_logging
+from biometeo_worker.database import connect
+from biometeo_worker.destinations import DESTINATIONS, DestinationConfig
+from biometeo_worker.logger import get_logger, setup_logging
 
 log = get_logger(__name__)
 
@@ -316,7 +316,7 @@ def main(argv: list[str] | None = None) -> int:
     setup_logging()
     args = parse_args(argv or [])
 
-    from config import load_settings
+    from biometeo_worker.config import load_settings
 
     settings = load_settings()
     sync(settings=settings, dry_run=args.dry_run)

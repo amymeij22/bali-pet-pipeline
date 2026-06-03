@@ -4,6 +4,7 @@
 
 # Python runtime / caches
 .venv/
+venv/
 __pycache__/
 *.py[cod]
 
@@ -15,13 +16,17 @@ __pycache__/
 .coverage.*
 htmlcov/
 
-# Output artifacts (run folders written by main.py)
-pet_analysis/
-pet_analysis_*/
-
-# Temporary folders (used in prod when KEEP_LOCAL_ARTIFACTS=false)
-pet_analysis_tmp/
-*/pet_analysis_tmp/
+# Output artifacts
+reports/*.csv
+reports/*.json
+reports/*.xlsx
+outputs/
+*.log
 
 # OS noise
 .DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
