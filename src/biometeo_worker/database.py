@@ -272,23 +272,41 @@ def import_forecast_batch(
 def check_already_processed_batches(produced_at_list: list[str], settings: Settings) -> set[str]:
     """
     Memeriksa batch mana saja dari list produced_at yang sudah ada di database.
-    Mengmengembalikan set produced_at yang sudah terdaftar.
+    Mengembalikan set produced_at yang sudah terdaftar.
     """
     if not produced_at_list:
         return set()
+
+    from datetime import datetime
 
     conn = connect(settings)
     cur = conn.cursor()
     try:
         cur.execute(
             """
-            SELECT produced_at
+            SELECT produced_at::timestamp
             FROM public.forecast_batches
-            WHERE produced_at = ANY(%s)
+            WHERE produced_at = ANY(%s::timestamptz[])
             """,
             (produced_at_list,),
         )
-        return {r[0] for r in cur.fetchall()}
+        db_naive_dts = {r[0] for r in cur.fetchall()}
+
+        input_naive_map = {}
+        for s in produced_at_list:
+            try:
+                s_clean = s.strip()
+                dt = datetime.fromisoformat(s_clean)
+                input_naive_map[dt] = s_clean
+            except ValueError:
+                log.warning("Format produced_at tidak valid untuk parsing: %s", s)
+
+        matched_strings = set()
+        for dt, orig_s in input_naive_map.items():
+            if dt in db_naive_dts:
+                matched_strings.add(orig_s)
+
+        return matched_strings
     except Exception as e:
         log.warning("Gagal memeriksa existing batches di DB: %s", e)
         return set()
