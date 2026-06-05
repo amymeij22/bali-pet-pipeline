@@ -31,16 +31,16 @@ Berikut adalah representasi alur pemrosesan data *end-to-end* dari pengunduhan h
 
 ```mermaid
 graph TD
-    A[GCP Cloud Scheduler] -- Request Trigger (POST) --> B[GitHub Actions Runner]
-    B -- Eksekusi main.py --> C{Probe Check?}
-    C -- Data Batch Sudah Ada --> D[Early Skip / Berhenti Bersih]
-    C -- Ada Data Baru / Run Manual --> E[Request Data Prakiraan BMKG]
+    A[GCP Cloud Scheduler] -- "Request Trigger (POST)" --> B[GitHub Actions Runner]
+    B -- "Eksekusi main.py" --> C{Probe Check?}
+    C -- "Data Batch Sudah Ada" --> D[Early Skip / Berhenti Bersih]
+    C -- "Ada Data Baru / Run Manual" --> E[Request Data Prakiraan BMKG]
     E --> F[Preprocessing Data Cuaca]
-    F --> G[Hitung mPET & Tmrt (biometeo)]
+    F --> G["Hitung mPET & Tmrt (biometeo)"]
     G --> H[Klasifikasi Kenyamanan PET]
-    H --> I[Simpan Arsip CSV ke Supabase Storage (S3)]
-    H --> J[Unggah Hasil ke PostgreSQL (Supabase)]
-    I --> K[Picu Notifikasi via WebGIS Push Service]
+    H --> I["Simpan Arsip CSV ke Supabase Storage (S3)"]
+    H --> J["Unggah Hasil ke PostgreSQL (Supabase)"]
+    I --> K["Picu Notifikasi via WebGIS Push Service"]
     J --> K
     K --> L[Selesai]
 ```
