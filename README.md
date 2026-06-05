@@ -199,3 +199,14 @@ Uji coba ini memverifikasi:
 2. Pustaka biner `biometeo` sukses di-import.
 3. Fungsi komputasi inti (`Tmrt_calc` dan `mPET`) berfungsi normal.
 4. Struktur internal `biometeo_worker` dapat di-import dengan benar.
+
+---
+
+## Kontribusi & Hak Cipta
+
+Proyek ini bersifat **private** (tertutup). Seluruh hak cipta dilindungi oleh penulis dan Sekolah Tinggi Meteorologi Klimatologi dan Geofisika (STMKG). 
+
+Hubungi penulis jika ada pertanyaan lebih lanjut terkait penelitian ini:
+*   **Nama**: Ahmad Meijlan Yasir
+*   **Email**: yasirahmad220504@gmail.com
+*   **Instansi**: Sekolah Tinggi Meteorologi Klimatologi dan Geofisika (STMKG), Tangerang.
