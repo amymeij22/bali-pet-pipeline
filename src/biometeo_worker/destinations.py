@@ -1,5 +1,5 @@
 """
-Master destinasi wisata → desa (KDEPUM) + koordinat dan elevasi statis untuk biometeo.
+Master destinasi wisata -> desa (KDEPUM) + koordinat dan elevasi statis untuk biometeo.
 
 Koordinat dan sea_level_height harus sesuai metodologi penelitian (titik referensi / sumber resmi).
 """

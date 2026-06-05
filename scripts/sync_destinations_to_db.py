@@ -1,4 +1,4 @@
-"""Sinkronisasi master destinasi (lokal → database).
+"""Sinkronisasi master destinasi (lokal -> database).
 
 Catatan:
 - Script ini sumber kebenarannya adalah `cloudrun/destinations.py` (data destinasi + koordinat/elevasi).

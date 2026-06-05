@@ -11,6 +11,11 @@ on:
           - morning
           - evening
           - manual
+      run_tests:
+        description: "Jalankan unit tests (hanya berlaku jika slot = manual)"
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: biometeo-worker-${{ github.event.inputs.slot }}
@@ -39,6 +44,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: "pip"
+          cache-dependency-path: "requirements.txt"
 
       - name: Upgrade pip
         run: |
@@ -50,9 +56,10 @@ jobs:
 
       - name: Smoke test biometeo
         run: |
-          python -c "import biometeo; print('biometeo import OK')"
+          python scripts/smoke_test.py
 
       - name: Run tests
+        if: ${{ github.event.inputs.slot == 'manual' && github.event.inputs.run_tests == 'true' }}
         run: |
           pytest
         continue-on-error: false

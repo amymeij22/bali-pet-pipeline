@@ -39,7 +39,7 @@ def get_s3_client(settings: Settings):
 
 def upload_run_folder(folder_path: str, settings: Settings) -> dict[str, Any]:
     """Unggah semua file di bawah folder run (rekursif), prefix = nama folder run."""
-    log.info("Storage upload folder: %s → bucket=%s", folder_path, settings.s3_bucket_name)
+    log.info("Storage upload folder: %s -> bucket=%s", folder_path, settings.s3_bucket_name)
     s3 = get_s3_client(settings)
     prefix = os.path.basename(folder_path.rstrip("/\\"))
 
@@ -54,7 +54,7 @@ def upload_run_folder(folder_path: str, settings: Settings) -> dict[str, Any]:
             try:
                 s3.upload_file(path, settings.s3_bucket_name, key, ExtraArgs={"ContentType": ctype})
                 uploaded.append(rel)
-                log.info("Uploaded %s → s3://%s/%s", rel, settings.s3_bucket_name, key)
+                log.info("Uploaded %s -> s3://%s/%s", rel, settings.s3_bucket_name, key)
             except ClientError as e:
                 failed.append({"file": rel, "error": str(e)})
                 log.error("Gagal upload %s: %s", rel, str(e)[:120])

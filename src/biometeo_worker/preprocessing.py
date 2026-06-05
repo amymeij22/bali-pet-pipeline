@@ -1,4 +1,4 @@
-"""Prapemrosesan baris forecast BMKG → input biometeo."""
+"""Prapemrosesan baris forecast BMKG -> input biometeo."""
 
 from __future__ import annotations
 
@@ -24,13 +24,13 @@ def _finite_number(x: Any) -> bool:
 
 
 def cloud_percent_to_oktas(cloud_cover_percent: float) -> float:
-    """tcc % → oktas N, clamp 0–8."""
+    """tcc % -> oktas N, clamp 0–8."""
     n = float(cloud_cover_percent) / 12.5
     return max(0.0, min(8.0, n))
 
 
 def ws_kmh_to_ms_10m(ws_kmh: float) -> float:
-    """BMKG ws dalam km/jam → m/s pada ketinggian referensi 10 m (asumsi skrip lama: /3.6)."""
+    """BMKG ws dalam km/jam -> m/s pada ketinggian referensi 10 m (asumsi skrip lama: /3.6)."""
     return float(ws_kmh) / 3.6
 
 

@@ -1,6 +1,6 @@
 """
-Orkestrator pipeline produksi: BMKG → prapemrosesan → biometeo → klasifikasi →
-arsip CSV (selaras cloud_run/main.py) → PostgreSQL (Supabase) → Supabase Storage (S3).
+Orkestrator pipeline produksi: BMKG -> prapemrosesan -> biometeo -> klasifikasi ->
+arsip CSV (selaras cloud_run/main.py) -> PostgreSQL (Supabase) -> Supabase Storage (S3).
 
 Default: jalankan end-to-end (database + storage). Gunakan --dry-run / --skip-db / --skip-storage bila perlu.
 """
@@ -243,7 +243,7 @@ def build_grp_and_exports(
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        description="Pipeline PET Bali (biometeo): BMKG → biometeo → CSV → Postgres → S3"
+        description="Pipeline PET Bali (biometeo): BMKG -> biometeo -> CSV -> Postgres -> S3"
     )
     p.add_argument(
         "--dry-run",
