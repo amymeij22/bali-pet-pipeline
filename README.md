@@ -1,21 +1,57 @@
-# Pipeline PET / Kenyamanan Termal (GitHub Actions Windows Worker)
+# Pipeline PET / Kenyamanan Termal (GitHub Actions Worker)
 
 Repositori ini berisi orkestrator *pipeline* data *end-to-end* yang bertugas mengunduh data prakiraan cuaca dari API BMKG, memproses parameter meteorologi untuk menghitung indeks kenyamanan termal *Physiologically Equivalent Temperature* (PET) menggunakan pustaka `biometeo` (v0.4.1), mengklasifikasikan kategori kenyamanan termal, serta mengarsipkan hasilnya ke database PostgreSQL (Supabase) dan Supabase Storage (S3-compatible).
 
-Sistem ini dikonfigurasi untuk berjalan di lingkungan **GitHub Actions dengan runner Windows (`windows-latest`)** karena pustaka perhitungan biometeorologi (`biometeo`) membutuhkan dependensi biner yang berjalan di platform Windows/Microsoft.
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
+[![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-Windows%20Runner-blue?logo=githubactions)](https://github.com/features/actions)
+[![Pytest](https://img.shields.io/badge/Tests-Pytest-green?logo=pytest)](https://pytest.org)
+[![Scheduler](https://img.shields.io/badge/Scheduler-GCP%20Cloud-blue?logo=googlecloud)](https://cloud.google.com/scheduler)
+[![License](https://img.shields.io/badge/License-Proprietary-red)](#)
 
 ---
 
 ## Daftar Isi
+- [Diagram Alur Kerja](#diagram-alur-kerja)
+- [Tentang Proyek](#tentang-proyek)
 - [Arsitektur & Struktur Direktori](#arsitektur--struktur-direktori)
-- [Fitur Pengecekan Batch Dini (Probe Check)](#fitur-pengecekan-batch-dini-probe-check)
+- [Fitur Utama](#fitur-utama)
 - [Dependensi Utama](#dependensi-utama)
-- [Variabel Lingkungan (Environment Variables)](#variabel-lingkungan-environment-variables)
-- [Penggunaan Lokal (Windows)](#penggunaan-lokal-windows)
-- [Penggunaan di GitHub Actions](#penggunaan-di-github-actions)
+- [Prasyarat (Prerequisites)](#prasyarat-prerequisites)
+- [Panduan Instalasi & Penggunaan](#panduan-instalasi--penggunaan)
+- [Pengujian & Verifikasi](#pengujian--verifikasi)
 - [Pemicu Jadwal Eksternal (GCP)](#pemicu-jadwal-eksternal-gcp)
 - [Sinkronisasi Data Destinasi](#sinkronisasi-data-destinasi)
-- [Pengujian & Verifikasi](#pengujian--verifikasi)
+- [Kontribusi & Hak Cipta](#kontribusi--hak-cipta)
+
+---
+
+## Diagram Alur Kerja
+
+Berikut adalah representasi alur pemrosesan data *end-to-end* dari pengunduhan hingga pembaruan dasbor:
+
+```mermaid
+graph TD
+    A[GCP Cloud Scheduler] -- Request Trigger (POST) --> B[GitHub Actions Runner]
+    B -- Eksekusi main.py --> C{Probe Check?}
+    C -- Data Batch Sudah Ada --> D[Early Skip / Berhenti Bersih]
+    C -- Ada Data Baru / Run Manual --> E[Request Data Prakiraan BMKG]
+    E --> F[Preprocessing Data Cuaca]
+    F --> G[Hitung mPET & Tmrt (biometeo)]
+    G --> H[Klasifikasi Kenyamanan PET]
+    H --> I[Simpan Arsip CSV ke Supabase Storage (S3)]
+    H --> J[Unggah Hasil ke PostgreSQL (Supabase)]
+    I --> K[Picu Notifikasi via WebGIS Push Service]
+    J --> K
+    K --> L[Selesai]
+```
+
+---
+
+## Tentang Proyek
+
+Sistem ini dikonfigurasi untuk berjalan di lingkungan **GitHub Actions dengan runner Windows (`windows-latest`)** karena pustaka perhitungan biometeorologi (`biometeo`) membutuhkan dependensi biner Fortran/C yang telah dikompilasi khusus untuk platform Windows. 
+
+Pipeline ini berfungsi sebagai *backend* penyedia data untuk WebGIS, memastikan data kenyamanan termal terhitung secara periodik (setiap pergantian slot waktu BMKG) tanpa intervensi manual.
 
 ---
 
@@ -44,7 +80,7 @@ action/
 │       ├── preprocessing.py        # Normalisasi satuan & reduksi kecepatan angin
 │       └── storage.py              # Operasi upload arsip ke Supabase Storage (S3)
 ├── scripts/
-│   ├── smoke_test.py               # Pengujian fungsionalitas biometeo & biometeo_worker
+│   ├── smoke_test.py               # Pengujian cepat fungsionalitas biometeo
 │   ├── run_local.ps1               # Script PowerShell untuk eksekusi lokal
 │   └── sync_destinations_to_db.py  # Sinkronisasi master destinasi lokal ke DB
 ├── reports/                        # Lokasi penyimpanan laporan & keluaran CSV runtime
@@ -58,112 +94,108 @@ action/
 
 ---
 
-## Fitur Pengecekan Batch Dini (Probe Check)
+## Fitur Utama
 
-Untuk menghemat kuota menit komputasi GitHub Actions runner dan menghindari duplikasi pemrosesan data, program ini dilengkapi dengan mekanisme **Pengecekan Batch Dini (Probe Check)**:
-
-1. **Pengambilan Sampel (Probe)**: Di awal program, orkestrator memilih **3 desa secara acak** dari daftar destinasi aktif dan melakukan request BMKG singkat untuk mengambil nilai `analysis_date`.
-2. **Validasi Database**: Program mengecek ke database Supabase (tabel `forecast_batches`) apakah seluruh `analysis_date` sampel tersebut sudah terdaftar.
-3. **Pemberhentian Dini (Early Skip)**: 
-   - Jika **semua** sampel `analysis_date` sudah ada di database, program akan log informasi skip dan langsung **berhenti secara bersih (Exit 0)** dalam waktu < 1 detik.
-   - Jika ditemukan `analysis_date` baru atau jika database dinonaktifkan (mode `--dry-run`/`--skip-db`), program akan melanjutkan eksekusi pipeline penuh (mengunduh data 45 desa, menghitung PET, mengunggah ke DB dan S3).
-
-Mekanisme ini menjaga agar program bersifat *Idempotent* dan memungkinkan pemicuan terjadwal dijalankan secara berkala (misal setiap jam) tanpa membuang-buang sumber daya komputasi.
+- **Pengecekan Batch Dini (Probe Check)**:
+  - Sebelum mengunduh semua data, program melakukan request BMKG singkat untuk **3 desa sampel secara acak**.
+  - Mengecek ke database apakah data dengan tanggal analisis tersebut sudah diproses.
+  - Jika sudah ada, program langsung berhenti secara bersih dalam < 1 detik (**Early Skip**), menghemat kuota menit GitHub Actions runner.
+- **Komputasi Kenyamanan Termal PET**: Integrasi perhitungan *Mean Radiant Temperature* (Tmrt) dan *Physiologically Equivalent Temperature* (PET) yang akurat.
+- **Normalisasi Data Cuaca**: Pengambilan otomatis data BMKG, penanganan format waktu (WITA/UTC), serta penyesuaian tinggi hembusan angin (*wind speed roughness translation*).
+- **Arsip Multi-Penyimpanan**: Hasil disimpan secara tabular di PostgreSQL untuk visualisasi dasbor, sekaligus diunggah dalam format CSV kompresi ke Supabase Storage (S3 compatible) sebagai arsip riset jangka panjang.
+- **Keamanan Kredensial**: Manajemen aman untuk seluruh parameter sensitif menggunakan integrasi *environment variables* lokal maupun GitHub Secrets.
 
 ---
 
 ## Dependensi Utama
 
-Detail pustaka utama yang digunakan dalam proyek ini dapat dilihat pada berkas [requirements.txt](requirements.txt):
-
-*   `biometeo==0.4.1`: Pustaka utama perhitungan parameter kenyamanan termal manusia (*Mean Radiant Temperature* / Tmrt dan *Physiologically Equivalent Temperature* / PET).
-*   `pandas` & `numpy`: Pustaka manipulasi data dan perhitungan numerik.
+Detail pustaka utama yang digunakan dalam proyek ini (didefinisikan pada [requirements.txt](requirements.txt)):
+*   `biometeo==0.4.1`: Pustaka utama perhitungan parameter kenyamanan termal manusia (Tmrt dan PET).
+*   `pandas` & `numpy`: Pengolahan data tabular, interpolasi, dan kalkulasi matriks parameter cuaca.
 *   `psycopg2-binary`: Driver konektor PostgreSQL untuk operasi database.
 *   `boto3`: AWS SDK untuk Python yang digunakan untuk mengunggah arsip ke Supabase Storage via protokol S3.
-*   `pytest` & `pytest-html`: Alat pengujian unit beserta pembuat laporan HTML hasil uji.
+*   `pytest` & `pytest-html`: Framework pengujian unit beserta pembuat laporan pengujian HTML.
 
 ---
 
-## Variabel Lingkungan (Environment Variables)
+## Prasyarat (Prerequisites)
 
-Salin berkas `.env.example` menjadi `.env` dan sesuaikan nilainya untuk menjalankan *pipeline* secara lokal atau konfigurasi di GitHub Secrets untuk kebutuhan *action workflow*.
-
-| Variabel | Deskripsi | Default |
-|---|---|---|
-| `DATABASE_URL` | URI koneksi utama PostgreSQL/Supabase | - |
-| `DB_USER` s.d. `DB_NAME` | Kredensial koneksi database alternatif | - |
-| `S3_ENDPOINT_URL` | URL endpoint S3 Supabase Storage | - |
-| `S3_ACCESS_KEY_ID` | Access Key ID untuk S3 storage | - |
-| `S3_SECRET_ACCESS_KEY` | Secret Access Key untuk S3 storage | - |
-| `S3_BUCKET_NAME` | Nama bucket tempat penyimpanan arsip | `pet_analysis` |
-| `APP_ENV` | Mode runtime aplikasi (`dev` atau `prod`) | `dev` |
-| `KEEP_LOCAL_ARTIFACTS`| Menyimpan arsip keluaran lokal setelah run | `true` |
-| `OUTPUT_PARENT_DIR` | Folder utama penyimpanan laporan lokal | `reports` |
-
-*Catatan: Pada lingkungan `APP_ENV=prod` dan `KEEP_LOCAL_ARTIFACTS=false`, berkas CSV keluaran akan dibuat di direktori temporer sistem dan langsung dihapus setelah berhasil diunggah ke storage S3 untuk efisiensi ruang penyimpanan.*
+Untuk menjalankan proyek ini secara lokal, Anda memerlukan:
+- Perangkat dengan Sistem Operasi **Windows** (karena pustaka biner `biometeo` membutuhkan compiler Windows runtime).
+- **Python 3.10** ke atas terinstal di sistem.
 
 ---
 
-## Penggunaan Lokal (Windows)
+## Panduan Instalasi & Penggunaan
 
-Eksekusi lokal memerlukan sistem operasi Windows agar pustaka biner `biometeo` dapat dijalankan.
-
-### Langkah Persiapan
-1. Aktifkan *virtual environment* Python:
+1. **Aktifkan Virtual Environment Python**:
    ```powershell
+   python -m venv .venv
    .venv\Scripts\Activate.ps1
    ```
-2. Pasang semua dependensi yang dibutuhkan:
+
+2. **Pasang dependensi package**:
    ```powershell
    pip install -r requirements.txt
    ```
 
-### Eksekusi Pipeline
-Jalankan *pipeline* menggunakan skrip PowerShell pembantu:
-```powershell
-.\scripts\run_local.ps1
-```
-Skrip di atas secara otomatis menyetel variabel `PYTHONPATH=src` dan `RUN_ENV=local` serta memanggil program utama dengan parameter slot `manual`.
+3. **Konfigurasi Environment**:
+   Salin file `.env.example` menjadi `.env` dan lengkapi nilainya:
 
-Opsi argumen CLI tambahan pada `main.py`:
-*   `--slot [morning|evening|manual]`: Menentukan slot waktu eksekusi run.
-*   `--dry-run`: Menghitung data dan menulis file lokal tanpa melakukan pengunggahan ke DB atau S3 Storage.
-*   `--skip-db`: Melewati proses unggah data hasil perhitungan ke database.
-*   `--skip-storage`: Melewati proses unggah berkas arsip ke S3 Storage.
-*   `--max-villages [N]`: Membatasi pemrosesan data BMKG hanya untuk N desa pertama.
+   | Variabel | Deskripsi | Default / Status |
+   |---|---|---|
+   | `DATABASE_URL` | URI koneksi utama PostgreSQL/Supabase | *Wajib* |
+   | `S3_ENDPOINT_URL` | URL endpoint S3 Supabase Storage | *Wajib* |
+   | `S3_ACCESS_KEY_ID` | Access Key ID untuk S3 storage | *Wajib* |
+   | `S3_SECRET_ACCESS_KEY` | Secret Access Key untuk S3 storage | *Wajib* |
+   | `S3_BUCKET_NAME` | Nama bucket tempat penyimpanan arsip | `pet_analysis` |
+   | `APP_ENV` | Mode runtime aplikasi (`dev` atau `prod`) | `dev` |
+   | `KEEP_LOCAL_ARTIFACTS`| Menyimpan arsip keluaran lokal setelah run | `true` |
+   | `OUTPUT_PARENT_DIR` | Folder utama penyimpanan laporan lokal | `reports` |
+
+4. **Jalankan Pipeline secara Lokal**:
+   Eksekusi program secara langsung menggunakan pembantu PowerShell:
+   ```powershell
+   .\scripts\run_local.ps1
+   ```
+   *Catatan: Skrip ini secara otomatis memformat `PYTHONPATH=src` dan menjalankan CLI utama pada slot `manual`.*
+
+   Opsi parameter CLI tambahan pada `main.py`:
+   - `--slot [morning|evening|manual]`: Menentukan slot waktu eksekusi run.
+   - `--dry-run`: Menghitung data dan menulis file lokal tanpa mengunggah ke DB atau S3.
+   - `--skip-db`: Melewati proses unggah data ke database PostgreSQL.
+   - `--skip-storage`: Melewati proses unggah file arsip CSV ke S3 Storage.
+   - `--max-villages [N]`: Membatasi pengolahan data hanya untuk N desa pertama (sangat berguna untuk debugging cepat).
 
 ---
 
-## Penggunaan di GitHub Actions
+## Pengujian & Verifikasi
 
-Repositori ini memiliki dua workflow GitHub Actions:
+Pengujian pada repositori ini dibagi menjadi dua tingkat pengujian otomatis:
 
-### 1. CI Workflow (`.github/workflows/ci.yml`)
-Berjalan secara otomatis pada setiap `push` atau `pull_request` ke cabang `main`. Alur ini bertugas memverifikasi kualitas kode dengan menjalankan *smoke test* dan unit test (`pytest`) menggunakan runner Windows.
+### 1. Pengujian Unit (Pytest)
+Menguji logika modul independen seperti kalkulasi normalisasi cuaca, skema database, pemecah string tanggal, dan penentu kategori kenyamanan:
+```powershell
+pytest
+```
 
-### 2. Run Biometeo Worker Workflow (`.github/workflows/run-biometeo-worker.yml`)
-Digunakan untuk jalannya pipeline produksi (scheduled) atau manual debug via `workflow_dispatch`.
-
-*   **Parameter Input Manual Run**:
-    *   `slot` (pilihan: `morning`, `evening`, `manual`): Slot waktu berjalan.
-    *   `run_tests` (tipe: `boolean`, default `false`): Jika disetel `true` (hanya berlaku jika `slot=manual`), alur kerja akan menjalankan unit test (`pytest`) secara lengkap. Pada slot terjadwal (`morning`/`evening`), langkah pengujian unit dilewati untuk menghemat compute time.
-*   **Langkah Pemicu Manual**:
-    1. Masuk ke menu **Actions** di GitHub.
-    2. Pilih workflow **Run Biometeo Worker** di sebelah kiri.
-    3. Klik **Run workflow**, tentukan opsi input parameter, lalu klik tombol **Run workflow** berwarna hijau.
-
-### Kredensial Rahasia (Secrets) yang Dibutuhkan
-Kunci-kunci berikut harus dikonfigurasi di repositori GitHub (**Settings -> Secrets and Variables -> Actions**):
-*   `DATABASE_URL`: URI koneksi database Supabase.
-*   `S3_ENDPOINT_URL`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_BUCKET_NAME`, `S3_REGION`: Informasi bucket Supabase Storage (S3).
+### 2. Smoke Test
+Memverifikasi fungsionalitas dasar komputasi `biometeo` dan integritas modul worker dalam hitungan milidetik. Uji coba ini dijalankan secara otomatis di runner GitHub Actions sebelum pengujian lainnya:
+```powershell
+python scripts/smoke_test.py
+```
+Smoke test memverifikasi:
+- Pustaka biner `biometeo` berhasil di-import tanpa error runtime C.
+- Fungsi komputasi inti (`Tmrt_calc` dan `mPET`) menghasilkan output matematis yang valid.
+- Struktur internal program `biometeo_worker` terstruktur dengan benar.
 
 ---
 
 ## Pemicu Jadwal Eksternal (GCP)
 
-Untuk menghemat kuota eksekusi dan meningkatkan keandalan kontrol penjadwalan, repositori ini **tidak menggunakan modul cron scheduler bawaan GitHub Actions**.
+Untuk menghemat kuota eksekusi dan meningkatkan keandalan kontrol penjadwalan, repositori ini **tidak menggunakan cron scheduler bawaan GitHub Actions**.
 
-Sebagai gantinya, jadwal eksekusi produksi pagi & sore diorkestrasi secara eksternal (seperti **GCP Cloud Scheduler**). Penjadwal tersebut mengirimkan request HTTP POST ke REST API GitHub (`/repos/{owner}/{repo}/actions/workflows/run-biometeo-worker.yml/dispatches`) dengan autentikasi Token PAT dan input parameter `slot` yang sesuai.
+Sebagai gantinya, jadwal eksekusi produksi pagi & sore diorkestrasi secara eksternal (menggunakan **GCP Cloud Scheduler**). Penjadwal tersebut mengirimkan request HTTP POST ke REST API GitHub (`/repos/{owner}/{repo}/actions/workflows/run-biometeo-worker.yml/dispatches`) dengan autentikasi Token PAT dan input parameter `slot` yang sesuai.
 
 ---
 
@@ -175,30 +207,7 @@ Jika terdapat pembaruan data koordinat, nama destinasi, atau tinggi elevasi laut
 $env:PYTHONPATH="src"
 python -m scripts.sync_destinations_to_db
 ```
-
 Tambahkan bendera `--dry-run` untuk memverifikasi perubahan dan melakukan simulasi (rollback otomatis) sebelum perubahan permanen diterapkan di database.
-
----
-
-## Pengujian & Verifikasi
-
-### Pengujian Unit (Pytest)
-Pengujian unit menggunakan pustaka `pytest` dengan pengaturan yang didefinisikan dalam `pyproject.toml`.
-Untuk menjalankan seluruh suite pengujian secara lokal:
-```powershell
-pytest
-```
-
-### Smoke Test
-Smoke test digunakan untuk memverifikasi fungsionalitas dasar komputasi *biometeo* dan keutuhan paket *worker* dengan cepat (dalam milidetik). Pengujian ini otomatis dijalankan di GitHub Actions runner sebelum langkah kerja lainnya dimulai:
-```powershell
-python scripts/smoke_test.py
-```
-Uji coba ini memverifikasi:
-1. Python aktif di runner.
-2. Pustaka biner `biometeo` sukses di-import.
-3. Fungsi komputasi inti (`Tmrt_calc` dan `mPET`) berfungsi normal.
-4. Struktur internal `biometeo_worker` dapat di-import dengan benar.
 
 ---
 
