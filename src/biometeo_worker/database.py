@@ -267,3 +267,32 @@ def import_forecast_batch(
     finally:
         cur.close()
         conn.close()
+
+
+def check_already_processed_batches(produced_at_list: list[str], settings: Settings) -> set[str]:
+    """
+    Memeriksa batch mana saja dari list produced_at yang sudah ada di database.
+    Mengmengembalikan set produced_at yang sudah terdaftar.
+    """
+    if not produced_at_list:
+        return set()
+
+    conn = connect(settings)
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """
+            SELECT produced_at
+            FROM public.forecast_batches
+            WHERE produced_at = ANY(%s)
+            """,
+            (produced_at_list,),
+        )
+        return {r[0] for r in cur.fetchall()}
+    except Exception as e:
+        log.warning("Gagal memeriksa existing batches di DB: %s", e)
+        return set()
+    finally:
+        cur.close()
+        conn.close()
+

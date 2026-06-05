@@ -18,10 +18,10 @@ from typing import Any
 
 import pandas as pd
 
-from biometeo_worker.bmkg_client import fetch_all_unique_villages
+from biometeo_worker.bmkg_client import fetch_all_unique_villages, fetch_forecast_for_village
 from biometeo_worker.classification import classify_pet
 from biometeo_worker.config import Settings, load_settings
-from biometeo_worker.database import ForecastRowDB, import_forecast_batch
+from biometeo_worker.database import ForecastRowDB, import_forecast_batch, check_already_processed_batches
 from biometeo_worker.destinations import DESTINATIONS, DestinationConfig, build_unique_villages
 from biometeo_worker.destinations_source_db import fetch_destination_configs, validate_destination_configs
 from biometeo_worker.logger import get_logger, setup_logging
@@ -315,6 +315,59 @@ def main(argv: list[str] | None = None) -> int:
     kdep_to_dests = {v["kdepum_code"]: v["destination_names"] for v in villages}
 
     log.info("Memuat konfigurasi: destinasi=%s desa_unik=%s", len(destinations), len(villages))
+
+    do_db = not args.dry_run and not args.skip_db
+    if do_db and villages:
+        import random
+        import time
+
+        log.info("Memulai pengecekan batch awal (probe) dengan 3 lokasi acak...")
+        probe_villages = random.sample(villages, min(3, len(villages)))
+        probe_results = []
+
+        for i, pv in enumerate(probe_villages):
+            kdep = pv["kdepum_code"]
+            vname = pv["village_name"]
+            log.info("Probe [%s/%s] kdepum=%s village=%s", i + 1, len(probe_villages), kdep, vname)
+
+            recs, prod, fs, fe, err = fetch_forecast_for_village(
+                kdepum_code=kdep,
+                village_name=vname,
+                destination_names=pv.get("destination_names", []),
+                settings=settings,
+            )
+            if err:
+                log.warning("Probe [%s/%s] gagal: %s", i + 1, len(probe_villages), err)
+            elif prod:
+                log.info("Probe [%s/%s] sukses -> analysis_date: %s", i + 1, len(probe_villages), prod)
+                probe_results.append(prod)
+            else:
+                log.warning("Probe [%s/%s] sukses tetapi tidak memiliki produced_at/analysis_date", i + 1, len(probe_villages))
+
+            if i < len(probe_villages) - 1:
+                time.sleep(settings.request_delay_seconds)
+
+        if probe_results:
+            unique_prods = list(set(probe_results))
+            log.info("Memeriksa status %s analysis_date unik di database...", len(unique_prods))
+            existing_batches = check_already_processed_batches(unique_prods, settings)
+
+            if len(existing_batches) == len(unique_prods):
+                log.info(
+                    "Semua %s/%s analysis_date data hasil probe sudah terdaftar di database: %s. Pipeline dilewati (skipped).",
+                    len(existing_batches),
+                    len(unique_prods),
+                    list(existing_batches),
+                )
+                return 0
+            else:
+                new_batches = set(unique_prods) - existing_batches
+                log.info(
+                    "Ditemukan batch baru yang belum ada di database: %s. Melanjutkan pipeline penuh.",
+                    list(new_batches),
+                )
+        else:
+            log.warning("Pengecekan probe tidak mendapatkan analysis_date valid. Melanjutkan pipeline penuh sebagai fallback.")
 
     fetch = fetch_all_unique_villages(villages, settings)
     if not fetch.raw_records and not fetch.failed_villages:
