@@ -94,6 +94,11 @@ def import_forecast_batch(
         log.warning("Gagal introspect kolom weather_forecasts (lanjut minimal): %s", e)
 
     try:
+        # Cek apakah batch sudah terdaftar sebelumnya untuk mendeteksi batch baru (resilience)
+        cur.execute("SELECT id, is_latest FROM public.forecast_batches WHERE produced_at = %s", (produced_at,))
+        batch_row = cur.fetchone()
+        is_new_batch = batch_row is None
+
         cur.execute(
             """
             INSERT INTO public.forecast_batches (produced_at, is_latest, forecast_start, forecast_end)
@@ -105,7 +110,12 @@ def import_forecast_batch(
             (produced_at, forecast_start, forecast_end),
         )
         batch_id = cur.fetchone()[0]
-        log.info("Batch dibuat/diperbarui id=%s produced_at=%s (is_latest tidak ditimpa)", batch_id, produced_at)
+        log.info(
+            "Batch dibuat/diperbarui id=%s produced_at=%s (is_new=%s, is_latest tidak ditimpa default)",
+            batch_id,
+            produced_at,
+            is_new_batch,
+        )
 
         # Ambil data forecast yang sudah ada di database untuk batch_id ini
         cur.execute(
@@ -281,7 +291,8 @@ def import_forecast_batch(
         else:
             log.info("DB execute: Semua %s baris forecast dilewati karena sudah ada di database dengan nilai yang sama", len(rows))
 
-        if set_latest:
+        should_activate = set_latest or is_new_batch
+        if should_activate:
             cur.execute(
                 """
                 UPDATE public.forecast_batches
@@ -298,9 +309,14 @@ def import_forecast_batch(
                 """,
                 (batch_id,),
             )
-            log.info("Batch id=%s diset is_latest=TRUE dan batch lainnya FALSE jika belum sesuai", batch_id)
+            log.info(
+                "Batch id=%s diset is_latest=TRUE dan batch lainnya FALSE (set_latest=%s, is_new=%s)",
+                batch_id,
+                set_latest,
+                is_new_batch,
+            )
         else:
-            log.info("Batch id=%s tidak dimodifikasi status is_latest-nya (set_latest=False)", batch_id)
+            log.info("Batch id=%s (sudah ada) tidak dimodifikasi status is_latest-nya (set_latest=False)", batch_id)
 
         conn.commit()
         log.info("DB commit selesai: %s baris forecast sukses di-upsert", n)
