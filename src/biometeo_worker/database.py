@@ -69,13 +69,15 @@ def import_forecast_batch(
     forecast_end: str,
     rows: list[ForecastRowDB],
     settings: Settings,
+    set_latest: bool = True,
 ) -> int:
     """
     Transaksi:
-    1) insert batch is_latest=FALSE
-    2) upsert weather_forecasts
-    3) jika ada baris yang sukses diproses, set batch is_latest=TRUE dan nonaktifkan batch lain
-    Mengembalikan jumlah baris forecast yang di-upsert.
+    1) insert batch (is_latest=FALSE secara default, tidak di-reset jika batch sudah ada)
+    2) select data forecast yang sudah ada di database untuk batch ini guna meminimalkan I/O
+    3) upsert weather_forecasts untuk baris yang belum ada atau nilainya berubah
+    4) jika set_latest=True, set batch is_latest=TRUE (jika belum) dan nonaktifkan batch lain (jika masih TRUE)
+    Mengembalikan jumlah baris forecast yang benar-benar di-upsert ke DB.
     """
     if not rows:
         log.warning("Tidak ada baris forecast untuk di-insert; batch tidak dibuat sebagai latest")
@@ -97,14 +99,30 @@ def import_forecast_batch(
             INSERT INTO public.forecast_batches (produced_at, is_latest, forecast_start, forecast_end)
             VALUES (%s, FALSE, %s, %s)
             ON CONFLICT (produced_at) DO UPDATE SET forecast_start = EXCLUDED.forecast_start,
-                                                   forecast_end = EXCLUDED.forecast_end,
-                                                   is_latest = FALSE
+                                                   forecast_end = EXCLUDED.forecast_end
             RETURNING id
             """,
             (produced_at, forecast_start, forecast_end),
         )
         batch_id = cur.fetchone()[0]
-        log.info("Batch dibuat/updated id=%s produced_at=%s (is_latest sementara FALSE)", batch_id, produced_at)
+        log.info("Batch dibuat/diperbarui id=%s produced_at=%s (is_latest tidak ditimpa)", batch_id, produced_at)
+
+        # Ambil data forecast yang sudah ada di database untuk batch_id ini
+        cur.execute(
+            """
+            SELECT destination_id, forecast_time::text, temperature, humidity, wind_speed, pet_value
+            FROM public.weather_forecasts
+            WHERE batch_id = %s
+            """,
+            (batch_id,),
+        )
+        existing_map = {}
+        for r in cur.fetchall():
+            try:
+                t_str = r[1].split('+')[0].replace(' ', 'T')
+                existing_map[(r[0], t_str)] = (r[2], r[3], r[4], r[5])
+            except Exception:
+                existing_map[(r[0], str(r[1]))] = (r[2], r[3], r[4], r[5])
 
         cur.execute("SELECT kdepum_code, id FROM public.villages")
         v_map = {r[0]: r[1] for r in cur.fetchall()}
@@ -126,6 +144,7 @@ def import_forecast_batch(
         missing_v = set()
         missing_d = set()
         missing_c = set()
+        skipped_count = 0
 
         for r in rows:
             vid = v_map.get(r.kdepum_code)
@@ -143,6 +162,24 @@ def import_forecast_batch(
                 missing_c.add(r.temperate_category_key)
             if r.sub_tropic_category_key and sid is None:
                 missing_c.add(r.sub_tropic_category_key)
+
+            # Optimasi penyaringan: lewati data yang sudah ada dan nilainya persis sama
+            ftime = r.forecast_time
+            ftime_clean = ftime.split('+')[0].replace(' ', 'T')
+            existing = existing_map.get((did, ftime_clean))
+            if existing:
+                try:
+                    is_same = (
+                        abs(float(r.temperature) - float(existing[0])) < 0.01 and
+                        abs(float(r.humidity) - float(existing[1])) < 0.01 and
+                        abs(float(r.wind_speed_kmh) - float(existing[2])) < 0.01 and
+                        abs(float(r.pet_value) - float(existing[3])) < 0.01
+                    )
+                    if is_same:
+                        skipped_count += 1
+                        continue
+                except (ValueError, TypeError):
+                    pass
 
             base = (
                 did,
@@ -179,7 +216,7 @@ def import_forecast_batch(
         if missing_c:
             log.error("category_key tidak ada di thermal_categories (contoh): %s", list(missing_c)[:5])
 
-        if not tuples:
+        if not tuples and skipped_count == 0:
             conn.rollback()
             log.error("Tidak ada tuple valid untuk insert; rollback")
             return 0
@@ -237,28 +274,36 @@ def import_forecast_batch(
             DO UPDATE SET {", ".join(set_lines)}
         """
 
-        execute_values(cur, query, tuples)
         n = len(tuples)
+        if tuples:
+            execute_values(cur, query, tuples)
+            log.info("DB execute: %s baris forecast disisipkan/diperbarui (%s baris dilewati karena sama)", n, skipped_count)
+        else:
+            log.info("DB execute: Semua %s baris forecast dilewati karena sudah ada di database dengan nilai yang sama", len(rows))
 
-        cur.execute(
-            """
-            UPDATE public.forecast_batches
-            SET is_latest = TRUE
-            WHERE id = %s
-            """,
-            (batch_id,),
-        )
-        cur.execute(
-            """
-            UPDATE public.forecast_batches
-            SET is_latest = FALSE
-            WHERE id <> %s
-            """,
-            (batch_id,),
-        )
+        if set_latest:
+            cur.execute(
+                """
+                UPDATE public.forecast_batches
+                SET is_latest = TRUE
+                WHERE id = %s AND is_latest = FALSE
+                """,
+                (batch_id,),
+            )
+            cur.execute(
+                """
+                UPDATE public.forecast_batches
+                SET is_latest = FALSE
+                WHERE id <> %s AND is_latest = TRUE
+                """,
+                (batch_id,),
+            )
+            log.info("Batch id=%s diset is_latest=TRUE dan batch lainnya FALSE jika belum sesuai", batch_id)
+        else:
+            log.info("Batch id=%s tidak dimodifikasi status is_latest-nya (set_latest=False)", batch_id)
 
         conn.commit()
-        log.info("DB commit: %s baris forecast upsert, batch %s set is_latest=TRUE", n, batch_id)
+        log.info("DB commit selesai: %s baris forecast sukses di-upsert", n)
         return n
     except Exception:
         conn.rollback()

@@ -241,6 +241,26 @@ def build_grp_and_exports(
     )
 
 
+def determine_set_latest(slot: str, trigger_source: str) -> bool:
+    """
+    Menentukan apakah status is_latest harus diperbarui berdasarkan slot dan trigger source.
+    Pembaruan is_latest hanya bernilai True pada:
+    - Slot 'manual'
+    - Slot 'morning' dengan trigger 02:15 (02.15)
+    - Slot 'evening' dengan trigger 14:15 (14.15)
+    """
+    if slot == "manual":
+        return True
+
+    ts = trigger_source.strip().replace(".", ":").lower()
+    if slot == "morning":
+        return ts.startswith("02:15") or ts == "02:15"
+    if slot == "evening":
+        return ts.startswith("14:15") or ts == "14:15"
+
+    return True
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="Pipeline PET Bali (biometeo): BMKG -> biometeo -> CSV -> Postgres -> S3"
@@ -271,6 +291,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         default=os.getenv("RUN_SLOT", "manual"),
         help="Pipeline slot (morning, evening, manual)",
     )
+    p.add_argument(
+        "--trigger-source",
+        type=str,
+        default="manual",
+        help="Sumber pemicu eksekusi pipeline (contoh: 02:15, 03:15, 04:15, 14:15, 15:15, 16:15, atau manual)",
+    )
     return p.parse_args(argv)
 
 
@@ -278,7 +304,7 @@ def main(argv: list[str] | None = None) -> int:
     setup_logging()
     args = parse_args(argv or sys.argv[1:])
     settings = load_settings()
-    log.info("Slot terpilih: %s", args.slot)
+    log.info("Slot terpilih: %s, Sumber Trigger: %s", args.slot, args.trigger_source)
 
     try:
         validate_runtime_settings(
@@ -354,12 +380,11 @@ def main(argv: list[str] | None = None) -> int:
 
             if len(existing_batches) == len(unique_prods):
                 log.info(
-                    "Semua %s/%s analysis_date data hasil probe sudah terdaftar di database: %s. Pipeline dilewati (skipped).",
+                    "Semua %s/%s data hasil probe sudah terdaftar di database: %s. Melanjutkan pipeline penuh (mode upsert diaktifkan).",
                     len(existing_batches),
                     len(unique_prods),
                     list(existing_batches),
                 )
-                return 0
             else:
                 new_batches = set(unique_prods) - existing_batches
                 log.info(
@@ -509,12 +534,14 @@ def main(argv: list[str] | None = None) -> int:
         do_db = not args.dry_run and not args.skip_db
         inserted = 0
         if do_db:
+            set_latest = determine_set_latest(args.slot, args.trigger_source)
             inserted = import_forecast_batch(
                 produced_at=produced_at,
                 forecast_start=f_start,
                 forecast_end=f_end,
                 rows=db_rows,
                 settings=settings,
+                set_latest=set_latest,
             )
             summary["total_records_inserted"] = inserted
             if inserted == 0:

@@ -37,3 +37,24 @@ def test_validate_runtime_settings_prod_keep_local_false_cannot_skip_storage(mon
     with pytest.raises(ValueError, match=r"APP_ENV=prod.*jangan gunakan --skip-storage"):
         validate_runtime_settings(s, dry_run=False, skip_db=True, skip_storage=True)
 
+
+def test_determine_set_latest():
+    from biometeo_worker.main import determine_set_latest
+
+    # Manual run selalu TRUE
+    assert determine_set_latest("manual", "02:15") is True
+    assert determine_set_latest("manual", "anything") is True
+
+    # Morning run
+    assert determine_set_latest("morning", "02:15") is True
+    assert determine_set_latest("morning", "02.15 UTC") is True
+    assert determine_set_latest("morning", "03:15") is False
+    assert determine_set_latest("morning", "04:15") is False
+
+    # Evening run
+    assert determine_set_latest("evening", "14:15") is True
+    assert determine_set_latest("evening", "14.15 UTC") is True
+    assert determine_set_latest("evening", "15:15") is False
+    assert determine_set_latest("evening", "16:15") is False
+
+
