@@ -96,10 +96,10 @@ action/
 
 ## Fitur Utama
 
-- **Pengecekan Batch Dini (Probe Check)**:
+- **Pengecekan Batch Dini (Probe Check) & Ketahanan**:
   - Sebelum mengunduh semua data, program melakukan request BMKG singkat untuk **3 desa sampel secara acak**.
-  - Mengecek ke database apakah data dengan tanggal analisis tersebut sudah diproses.
-  - Jika sudah ada, program langsung berhenti secara bersih dalam < 1 detik (**Early Skip**), menghemat kuota menit GitHub Actions runner.
+  - Mengecek status ke database untuk mengetahui ketersediaan batch tersebut di awal.
+  - Program tetap melanjutkan eksekusi penuh (mode *upsert* diaktifkan) untuk memutakhirkan data, tetapi log probe digunakan untuk mencatat ketersediaan batch.
 - **Komputasi Kenyamanan Termal PET**: Integrasi perhitungan *Mean Radiant Temperature* (Tmrt) dan *Physiologically Equivalent Temperature* (PET) yang akurat.
 - **Normalisasi Data Cuaca**: Pengambilan otomatis data BMKG, penanganan format waktu (WITA/UTC), serta penyesuaian tinggi hembusan angin (*wind speed roughness translation*).
 - **Arsip Multi-Penyimpanan**: Hasil disimpan secara tabular di PostgreSQL untuk visualisasi dasbor, sekaligus diunggah dalam format CSV kompresi ke Supabase Storage (S3 compatible) sebagai arsip riset jangka panjang.
@@ -162,6 +162,7 @@ Untuk menjalankan proyek ini secara lokal, Anda memerlukan:
 
    Opsi parameter CLI tambahan pada `main.py`:
    - `--slot [morning|evening|manual]`: Menentukan slot waktu eksekusi run.
+   - `--trigger-source [02:15|14:15|...|manual]`: Menentukan sumber pemicu scheduler untuk mengontrol aktivasi status `is_latest` (default: `manual`).
    - `--dry-run`: Menghitung data dan menulis file lokal tanpa mengunggah ke DB atau S3.
    - `--skip-db`: Melewati proses unggah data ke database PostgreSQL.
    - `--skip-storage`: Melewati proses unggah file arsip CSV ke S3 Storage.
