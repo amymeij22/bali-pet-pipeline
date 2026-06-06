@@ -291,7 +291,7 @@ def import_forecast_batch(
         else:
             log.info("DB execute: Semua %s baris forecast dilewati karena sudah ada di database dengan nilai yang sama", len(rows))
 
-        should_activate = set_latest or is_new_batch
+        should_activate = set_latest
         if should_activate:
             cur.execute(
                 """
