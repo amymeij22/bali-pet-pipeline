@@ -291,7 +291,25 @@ def import_forecast_batch(
         else:
             log.info("DB execute: Semua %s baris forecast dilewati karena sudah ada di database dengan nilai yang sama", len(rows))
 
-        should_activate = set_latest
+        # Tentukan apakah batch ini lebih baru daripada batch yang saat ini ditandai sebagai latest
+        cur.execute("SELECT produced_at FROM public.forecast_batches WHERE is_latest = TRUE LIMIT 1")
+        latest_row = cur.fetchone()
+        
+        is_newer_than_current = False
+        if latest_row:
+            current_latest_produced_at = latest_row[0]
+            from datetime import datetime
+            try:
+                incoming_dt = datetime.fromisoformat(produced_at.replace("Z", "+00:00"))
+                if incoming_dt > current_latest_produced_at:
+                    is_newer_than_current = True
+            except Exception as e:
+                log.warning("Gagal membandingkan produced_at: %s", e)
+        else:
+            # Jika belum ada batch sama sekali di DB, maka batch baru otomatis dianggap lebih baru
+            is_newer_than_current = True
+
+        should_activate = set_latest or is_newer_than_current
         if should_activate:
             cur.execute(
                 """
