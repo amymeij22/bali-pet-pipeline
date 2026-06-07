@@ -301,7 +301,17 @@ def import_forecast_batch(
             from datetime import datetime
             try:
                 incoming_dt = datetime.fromisoformat(produced_at.replace("Z", "+00:00"))
-                if incoming_dt > current_latest_produced_at:
+                # Penanganan perbandingan tz-aware vs tz-naive
+                compare_incoming = incoming_dt.replace(tzinfo=None) if current_latest_produced_at.tzinfo is None else incoming_dt
+                compare_latest = current_latest_produced_at.replace(tzinfo=None) if incoming_dt.tzinfo is None else current_latest_produced_at
+                
+                # Double safety: jika salah satu tetap berbeda tipe, paksa keduanya naive
+                if compare_incoming.tzinfo is not None and compare_latest.tzinfo is None:
+                    compare_incoming = compare_incoming.replace(tzinfo=None)
+                elif compare_incoming.tzinfo is None and compare_latest.tzinfo is not None:
+                    compare_latest = compare_latest.replace(tzinfo=None)
+
+                if compare_incoming > compare_latest:
                     is_newer_than_current = True
             except Exception as e:
                 log.warning("Gagal membandingkan produced_at: %s", e)

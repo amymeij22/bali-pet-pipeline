@@ -39,6 +39,7 @@ jobs:
       PYTHONPATH: ${{ github.workspace }}\src
       RUN_ENV: production
       RUN_SLOT: ${{ github.event.inputs.slot }}
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - name: Checkout repository
