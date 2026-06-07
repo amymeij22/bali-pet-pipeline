@@ -100,6 +100,12 @@ action/
   - Sebelum mengunduh semua data, program melakukan request BMKG singkat untuk **3 desa sampel secara acak**.
   - Mengecek status ke database untuk mengetahui ketersediaan batch tersebut di awal.
   - Program tetap melanjutkan eksekusi penuh (mode *upsert* diaktifkan) untuk memutakhirkan data, tetapi log probe digunakan untuk mencatat ketersediaan batch.
+- **Dukungan Rerun Dinamis (Run 2/3 pada Batch yang Sama)**:
+  - Menyediakan kolom `updated_at` pada tabel `forecast_batches` yang secara otomatis diperbarui dengan `NOW()` jika batch dengan `produced_at` yang sama diimpor kembali. Hal ini memungkinkan sistem client WebGIS memantau perubahan data dan memuat ulang secara dinamis tanpa mengabaikan batch yang id-nya sama.
+- **Manajemen Status `is_latest` & Penanganan Slot Ulang (Retry Slots)**:
+  - Untuk menghindari pengiriman notifikasi/log duplikat pada slot eksekusi ulang, program hanya menetapkan status `is_latest = TRUE` jika data batch yang masuk memiliki timestamp `produced_at` yang secara kronologis lebih baru daripada batch aktif di database, atau jika bendera `set_latest` diset secara eksplisit.
+- **Komparasi Datetime Aman Zona Waktu (Timezone-Safe Comparison)**:
+  - Membandingkan secara aman objek datetime *timezone-aware* (dari string API BMKG) dengan *timezone-naive* (dari PostgreSQL/driver) tanpa memicu `TypeError`. Sistem secara cerdas menyelaraskan zona waktu sebelum melakukan perbandingan kronologis.
 - **Komputasi Kenyamanan Termal PET**: Integrasi perhitungan *Mean Radiant Temperature* (Tmrt) dan *Physiologically Equivalent Temperature* (PET) yang akurat.
 - **Normalisasi Data Cuaca**: Pengambilan otomatis data BMKG, penanganan format waktu (WITA/UTC), serta penyesuaian tinggi hembusan angin (*wind speed roughness translation*).
 - **Arsip Multi-Penyimpanan**: Hasil disimpan secara tabular di PostgreSQL untuk visualisasi dasbor, sekaligus diunggah dalam format CSV kompresi ke Supabase Storage (S3 compatible) sebagai arsip riset jangka panjang.
@@ -175,10 +181,19 @@ Untuk menjalankan proyek ini secara lokal, Anda memerlukan:
 Pengujian pada repositori ini dibagi menjadi dua tingkat pengujian otomatis:
 
 ### 1. Pengujian Unit (Pytest)
-Menguji logika modul independen seperti kalkulasi normalisasi cuaca, skema database, pemecah string tanggal, dan penentu kategori kenyamanan:
+Menguji logika modul independen seperti kalkulasi normalisasi cuaca, skema database, pemecah string tanggal, penentu kategori kenyamanan, validasi respons API BMKG, dan status aktivasi batch terbaru.
 ```powershell
-pytest
+# Set PYTHONPATH dan jalankan pytest
+$env:PYTHONPATH="src"
+.\.venv\Scripts\python.exe -m pytest
 ```
+Cakupan pengujian unit mencakup:
+- **`test_database_datetime_comparison.py`**: Memverifikasi penanganan timezone-naive vs timezone-aware saat komparasi `produced_at` serta memastikan logika aktivasi `is_latest` berfungsi dengan benar untuk menghindari notifikasi duplikat pada retry slot.
+- **`test_bmkg_client.py`**: Memverifikasi pemrosesan dan validasi respons JSON dari API BMKG, termasuk simulasi retries saat koneksi timeout atau gagal.
+- **`test_preprocessing.py`**: Memvalidasi konversi unit cuaca (kecepatan angin, persentase tutupan awan ke oktas) dan validitas data RH/suhu.
+- **`test_classification.py`**: Memverifikasi batas klasifikasi kenyamanan termal PET untuk standar beriklim sedang (temperate) dan sub-tropis.
+- **`test_config_and_runtime.py`**: Menguji konfigurasi CLI arguments, pembebanan environment variables, dan validasi status prod/dev.
+- **`test_storage_and_destinations_db.py`**: Memvalidasi kelengkapan konfigurasi destinasi wisata dan fungsi helper content-type S3 upload.
 
 ### 2. Smoke Test
 Memverifikasi fungsionalitas dasar komputasi `biometeo` dan integritas modul worker dalam hitungan milidetik. Uji coba ini dijalankan secara otomatis di runner GitHub Actions sebelum pengujian lainnya:
