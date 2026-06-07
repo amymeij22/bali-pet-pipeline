@@ -104,7 +104,8 @@ def import_forecast_batch(
             INSERT INTO public.forecast_batches (produced_at, is_latest, forecast_start, forecast_end)
             VALUES (%s, FALSE, %s, %s)
             ON CONFLICT (produced_at) DO UPDATE SET forecast_start = EXCLUDED.forecast_start,
-                                                   forecast_end = EXCLUDED.forecast_end
+                                                   forecast_end = EXCLUDED.forecast_end,
+                                                   updated_at = NOW()
             RETURNING id
             """,
             (produced_at, forecast_start, forecast_end),
