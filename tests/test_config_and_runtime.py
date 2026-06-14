@@ -30,6 +30,16 @@ def test_load_settings_default_keep_local_false_in_prod(monkeypatch: pytest.Monk
     assert s.keep_local_artifacts is False
 
 
+def test_env_bool_default(monkeypatch: pytest.MonkeyPatch):
+    # Mock load_dotenv so it does not load local .env
+    monkeypatch.setattr("biometeo_worker.config.load_dotenv", lambda: None)
+    monkeypatch.delenv("KEEP_LOCAL_ARTIFACTS", raising=False)
+    s = load_settings()
+    # By default, APP_ENV is dev, so keep_default is True
+    assert s.keep_local_artifacts is True
+
+
+
 def test_validate_runtime_settings_prod_keep_local_false_cannot_skip_storage(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("APP_ENV", "prod")
     monkeypatch.setenv("KEEP_LOCAL_ARTIFACTS", "0")

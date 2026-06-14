@@ -182,3 +182,141 @@ def test_fetch_all_unique_villages():
         assert result.forecast_end == "2026-06-07T05:00:00Z"
         assert len(result.raw_records) == 2
         assert len(result.failed_villages) == 0
+
+
+def test_fetch_forecast_for_village_empty_records(monkeypatch: pytest.MonkeyPatch):
+    settings = Settings(
+        database_url="postgresql://user:pass@host:5432/db",
+        db_user=None,
+        db_password=None,
+        db_host=None,
+        db_port=None,
+        db_name=None,
+        s3_endpoint_url="",
+        s3_access_key_id="",
+        s3_secret_access_key="",
+        s3_bucket_name="pet_analysis",
+        s3_region="ap-southeast-1",
+        app_env="dev",
+        keep_local_artifacts=True,
+        output_parent_dir="reports",
+        request_timeout_seconds=30,
+        request_retry_count=2,
+        request_retry_delay_seconds=0.01,
+        request_delay_seconds=0.01,
+    )
+    
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.headers = {"Content-Type": "application/json"}
+    mock_resp.json.return_value = {
+        "lokasi": {"lat": -8.7, "lon": 115.1, "timezone": "WITA"},
+        "data": [{"cuaca": []}]
+    }
+    
+    with patch("requests.get", return_value=mock_resp):
+        records, produced, f_start, f_end, err = fetch_forecast_for_village(
+            kdepum_code="51.03.01.1002",
+            village_name="Kuta",
+            destination_names=["Pantai Kuta"],
+            settings=settings
+        )
+        assert err == "response tanpa record cuaca"
+        assert records == []
+
+
+def test_fetch_forecast_for_village_request_exception(monkeypatch: pytest.MonkeyPatch):
+    settings = Settings(
+        database_url="postgresql://user:pass@host:5432/db",
+        db_user=None,
+        db_password=None,
+        db_host=None,
+        db_port=None,
+        db_name=None,
+        s3_endpoint_url="",
+        s3_access_key_id="",
+        s3_secret_access_key="",
+        s3_bucket_name="pet_analysis",
+        s3_region="ap-southeast-1",
+        app_env="dev",
+        keep_local_artifacts=True,
+        output_parent_dir="reports",
+        request_timeout_seconds=30,
+        request_retry_count=1,
+        request_retry_delay_seconds=0.01,
+        request_delay_seconds=0.01,
+    )
+    
+    with patch("requests.get", side_effect=requests.exceptions.RequestException("Request error!")):
+        records, produced, f_start, f_end, err = fetch_forecast_for_village(
+            kdepum_code="51.03.01.1002",
+            village_name="Kuta",
+            destination_names=["Pantai Kuta"],
+            settings=settings
+        )
+        assert "request_error" in err
+
+
+def test_fetch_forecast_for_village_generic_exception(monkeypatch: pytest.MonkeyPatch):
+    settings = Settings(
+        database_url="postgresql://user:pass@host:5432/db",
+        db_user=None,
+        db_password=None,
+        db_host=None,
+        db_port=None,
+        db_name=None,
+        s3_endpoint_url="",
+        s3_access_key_id="",
+        s3_secret_access_key="",
+        s3_bucket_name="pet_analysis",
+        s3_region="ap-southeast-1",
+        app_env="dev",
+        keep_local_artifacts=True,
+        output_parent_dir="reports",
+        request_timeout_seconds=30,
+        request_retry_count=1,
+        request_retry_delay_seconds=0.01,
+        request_delay_seconds=0.01,
+    )
+    
+    with patch("requests.get", side_effect=RuntimeError("Some error!")):
+        records, produced, f_start, f_end, err = fetch_forecast_for_village(
+            kdepum_code="51.03.01.1002",
+            village_name="Kuta",
+            destination_names=["Pantai Kuta"],
+            settings=settings
+        )
+        assert "RuntimeError" in err
+
+
+def test_fetch_all_unique_villages_with_errors():
+    settings = Settings(
+        database_url="postgresql://user:pass@host:5432/db",
+        db_user=None,
+        db_password=None,
+        db_host=None,
+        db_port=None,
+        db_name=None,
+        s3_endpoint_url="",
+        s3_access_key_id="",
+        s3_secret_access_key="",
+        s3_bucket_name="pet_analysis",
+        s3_region="ap-southeast-1",
+        app_env="dev",
+        keep_local_artifacts=True,
+        output_parent_dir="reports",
+        request_timeout_seconds=30,
+        request_retry_count=1,
+        request_retry_delay_seconds=0.01,
+        request_delay_seconds=0.01,
+    )
+
+    villages = [
+        {"kdepum_code": "51.03.01.1002", "village_name": "Kuta", "destination_names": ["Pantai Kuta"]},
+    ]
+
+    with patch("biometeo_worker.bmkg_client.fetch_forecast_for_village", return_value=([], None, None, None, "some error")):
+        result = fetch_all_unique_villages(villages, settings)
+        assert len(result.failed_villages) == 1
+        assert result.failed_villages[0]["error"] == "some error"
+

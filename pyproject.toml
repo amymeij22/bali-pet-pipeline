@@ -14,3 +14,23 @@ filterwarnings = [
 markers = [
     "biometeo_smoke: membutuhkan biometeo terpasang (wheel sesuai Python/OS)"
 ]
+
+[tool.coverage.run]
+source = ["src/biometeo_worker"]
+omit = [
+    "*/tests/*",
+    "*/scripts/*"
+]
+
+[tool.coverage.report]
+exclude_also = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "except ImportError:",
+    "pass",
+    "\\.\\.\\."
+]
+fail_under = 100
+
