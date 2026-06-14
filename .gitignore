@@ -38,9 +38,5 @@ pet_analysis_*/
 # Local Project documentation
 project-summary.md
 
-# Local testing scripts
-scripts/compare_pet_utci.py
-reports/*.png
-
 
 
