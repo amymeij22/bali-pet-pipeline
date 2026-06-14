@@ -35,3 +35,7 @@ Thumbs.db
 pet_analysis/
 pet_analysis_*/
 
+# Local Project documentation
+project-summary.md
+
+
