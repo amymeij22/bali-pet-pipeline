@@ -4,7 +4,8 @@ Repositori ini berisi orkestrator *pipeline* data *end-to-end* yang bertugas men
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
 [![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-Windows%20Runner-blue?logo=githubactions)](https://github.com/features/actions)
-[![Pytest](https://img.shields.io/badge/Tests-Pytest-green?logo=pytest)](https://pytest.org)
+[![Pytest](https://img.shields.io/badge/Tests-102%20Passed-green?logo=pytest)](https://pytest.org)
+[![Coverage](https://img.shields.io/badge/Coverage-100%25-green?logo=pytest)](#)
 [![Scheduler](https://img.shields.io/badge/Scheduler-GCP%20Cloud-blue?logo=googlecloud)](https://cloud.google.com/scheduler)
 [![License](https://img.shields.io/badge/License-Proprietary-red)](#)
 
@@ -183,17 +184,25 @@ Pengujian pada repositori ini dibagi menjadi dua tingkat pengujian otomatis:
 ### 1. Pengujian Unit (Pytest)
 Menguji logika modul independen seperti kalkulasi normalisasi cuaca, skema database, pemecah string tanggal, penentu kategori kenyamanan, validasi respons API BMKG, dan status aktivasi batch terbaru.
 ```powershell
-# Set PYTHONPATH dan jalankan pytest
+# Menjalankan seluruh pengujian unit
 $env:PYTHONPATH="src"
 .\.venv\Scripts\python.exe -m pytest
+
+# Menjalankan pengujian unit dengan laporan cakupan kode (coverage)
+.\.venv\Scripts\python.exe -m pytest --cov=biometeo_worker --cov-report=term-missing
 ```
-Cakupan pengujian unit mencakup:
+Cakupan pengujian unit mencakup seluruh modul dengan pencapaian **100% code coverage** (Statements, Branches, Functions, Lines):
 - **`test_database_datetime_comparison.py`**: Memverifikasi penanganan timezone-naive vs timezone-aware saat komparasi `produced_at` serta memastikan logika aktivasi `is_latest` berfungsi dengan benar untuk menghindari notifikasi duplikat pada retry slot.
+- **`test_database_queries.py`**: Menguji modul kueri database PostgreSQL (`database.py` dan `destinations_source_db.py`) termasuk pemuatan konfigurasi destinasi dan manipulasi data.
 - **`test_bmkg_client.py`**: Memverifikasi pemrosesan dan validasi respons JSON dari API BMKG, termasuk simulasi retries saat koneksi timeout atau gagal.
 - **`test_preprocessing.py`**: Memvalidasi konversi unit cuaca (kecepatan angin, persentase tutupan awan ke oktas) dan validitas data RH/suhu.
 - **`test_classification.py`**: Memverifikasi batas klasifikasi kenyamanan termal PET untuk standar beriklim sedang (temperate) dan sub-tropis.
 - **`test_config_and_runtime.py`**: Menguji konfigurasi CLI arguments, pembebanan environment variables, dan validasi status prod/dev.
 - **`test_storage_and_destinations_db.py`**: Memvalidasi kelengkapan konfigurasi destinasi wisata dan fungsi helper content-type S3 upload.
+- **`test_logger.py`**: Memverifikasi inisialisasi logger terstandarisasi.
+- **`test_storage.py`**: Menguji pengunggahan artefak folder run ke Supabase Storage (S3-compatible) menggunakan mock boto3 client.
+- **`test_main_flow.py`**: Orkestrasi penuh pengujian pipeline pada `main.py` mencakup seluruh percabangan dry-run, skip-db, skip-storage, parsial-sukses, kegagalan unggah, dan logika probe check.
+
 
 ### 2. Smoke Test
 Memverifikasi fungsionalitas dasar komputasi `biometeo` dan integritas modul worker dalam hitungan milidetik. Uji coba ini dijalankan secara otomatis di runner GitHub Actions sebelum pengujian lainnya:
