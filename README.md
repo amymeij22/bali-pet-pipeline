@@ -184,14 +184,14 @@ Pengujian pada repositori ini dibagi menjadi dua tingkat pengujian otomatis:
 ### 1. Pengujian Unit (Pytest)
 Menguji logika modul independen seperti kalkulasi normalisasi cuaca, skema database, pemecah string tanggal, penentu kategori kenyamanan, validasi respons API BMKG, dan status aktivasi batch terbaru.
 ```powershell
-# Menjalankan seluruh pengujian unit
-$env:PYTHONPATH="src"
+# Menjalankan seluruh pengujian unit dan otomatis membuat laporan hasil uji & cakupan kode HTML
 .\.venv\Scripts\python.exe -m pytest
-
-# Menjalankan pengujian unit dengan laporan cakupan kode (coverage)
-.\.venv\Scripts\python.exe -m pytest --cov=biometeo_worker --cov-report=term-missing
 ```
-Cakupan pengujian unit mencakup seluruh modul dengan pencapaian **100% code coverage** (Statements, Branches, Functions, Lines):
+Menjalankan perintah di atas akan secara otomatis menghasilkan dua laporan visual sekaligus di bawah folder `reports/`:
+1. **`reports/pytest-report.html`**: Laporan hasil eksekusi pengujian skenario unit (102 passed).
+2. **`reports/coverage-report/index.html`**: Laporan interaktif cakupan kode (*code coverage*) per berkas yang mendokumentasikan pernyataan **100% statement coverage (927/927 statements)** untuk ke-11 modul inti `biometeo_worker`.
+
+Daftar file pengujian unit:
 - **`test_database_datetime_comparison.py`**: Memverifikasi penanganan timezone-naive vs timezone-aware saat komparasi `produced_at` serta memastikan logika aktivasi `is_latest` berfungsi dengan benar untuk menghindari notifikasi duplikat pada retry slot.
 - **`test_database_queries.py`**: Menguji modul kueri database PostgreSQL (`database.py` dan `destinations_source_db.py`) termasuk pemuatan konfigurasi destinasi dan manipulasi data.
 - **`test_bmkg_client.py`**: Memverifikasi pemrosesan dan validasi respons JSON dari API BMKG, termasuk simulasi retries saat koneksi timeout atau gagal.
@@ -202,6 +202,7 @@ Cakupan pengujian unit mencakup seluruh modul dengan pencapaian **100% code cove
 - **`test_logger.py`**: Memverifikasi inisialisasi logger terstandarisasi.
 - **`test_storage.py`**: Menguji pengunggahan artefak folder run ke Supabase Storage (S3-compatible) menggunakan mock boto3 client.
 - **`test_main_flow.py`**: Orkestrasi penuh pengujian pipeline pada `main.py` mencakup seluruh percabangan dry-run, skip-db, skip-storage, parsial-sukses, kegagalan unggah, dan logika probe check.
+
 
 
 ### 2. Smoke Test

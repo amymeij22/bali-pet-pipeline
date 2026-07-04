@@ -5,7 +5,7 @@ description = "Windows-based scheduled biometeo data pipeline worker"
 requires-python = ">=3.12"
 
 [tool.pytest.ini_options]
-addopts = "-q --html=reports/pytest-report.html --self-contained-html"
+addopts = "-q --html=reports/pytest-report.html --self-contained-html --cov=biometeo_worker --cov-report=html:reports/coverage-report --cov-report=term-missing"
 pythonpath = ["src"]
 testpaths = ["tests"]
 filterwarnings = [
