@@ -1,12 +1,14 @@
-# Pipeline PET / Kenyamanan Termal (GitHub Actions Worker)
+# Bali PET biometeo_worker (Backend Pipeline)
 
-Repositori ini berisi orkestrator *pipeline* data *end-to-end* yang bertugas mengunduh data prakiraan cuaca dari API BMKG, memproses parameter meteorologi untuk menghitung indeks kenyamanan termal *Physiologically Equivalent Temperature* (PET) menggunakan pustaka `biometeo` (v0.4.1), mengklasifikasikan kategori kenyamanan termal, serta mengarsipkan hasilnya ke database PostgreSQL (Supabase) dan Supabase Storage (S3-compatible).
+Pipeline data otomatis berbasis Python untuk mengunduh prakiraan cuaca wilayah Bali dari BMKG, memproses parameter meteorologi untuk menghitung kenyamanan termal manusia menggunakan indeks **Physiological Equivalent Temperature (PET)**, serta menyimpannya ke database PostgreSQL (Supabase) dan arsip Supabase Storage (S3).
 
-[![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
-[![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-Windows%20Runner-blue?logo=githubactions)](https://github.com/features/actions)
-[![Pytest](https://img.shields.io/badge/Tests-102%20Passed-green?logo=pytest)](https://pytest.org)
-[![Coverage](https://img.shields.io/badge/Coverage-100%25-green?logo=pytest)](#)
-[![Scheduler](https://img.shields.io/badge/Scheduler-GCP%20Cloud-blue?logo=googlecloud)](https://cloud.google.com/scheduler)
+Proyek ini dikembangkan sebagai bagian dari penelitian Tugas Akhir (Skripsi) di **Sekolah Tinggi Meteorologi Klimatologi dan Geofisika (STMKG)**.
+
+[![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python&logoColor=white)](https://python.org)
+[![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-Windows_Runner-blue?logo=githubactions&logoColor=white)](https://github.com/features/actions)
+[![GCP Cloud Scheduler](https://img.shields.io/badge/GCP-Cloud_Scheduler-blue?logo=googlecloud&logoColor=white)](https://cloud.google.com/scheduler)
+[![Pytest](https://img.shields.io/badge/Pytest-102%20Passed-green?logo=pytest&logoColor=white)](https://pytest.org)
+[![Coverage](https://img.shields.io/badge/Coverage-100%25-green?logo=pytest&logoColor=white)](#)
 [![License](https://img.shields.io/badge/License-Proprietary-red)](#)
 
 ---
@@ -16,23 +18,24 @@ Repositori ini berisi orkestrator *pipeline* data *end-to-end* yang bertugas men
 - [Tentang Proyek](#tentang-proyek)
 - [Arsitektur & Struktur Direktori](#arsitektur--struktur-direktori)
 - [Fitur Utama](#fitur-utama)
-- [Dependensi Utama](#dependensi-utama)
-- [Prasyarat (Prerequisites)](#prasyarat-prerequisites)
+- [Spesifikasi Teknologi (Tech Stack)](#spesifikasi-teknologi-tech-stack)
 - [Panduan Instalasi & Penggunaan](#panduan-instalasi--penggunaan)
-- [Pengujian & Verifikasi](#pengujian--verifikasi)
-- [Pemicu Jadwal Eksternal (GCP)](#pemicu-jadwal-eksternal-gcp)
+- [Pengujian & Penjaminan Kualitas (Testing)](#pengujian--penjaminan-kualitas-testing)
+  - [1. Pengujian Unit (Pytest)](#1-pengujian-unit-pytest)
+  - [2. Pengujian Asap (Smoke Test)](#2-pengujian-asap-smoke-test)
+- [Orkestrasi GCP Cloud Scheduler](#orkestrasi-gcp-cloud-scheduler)
 - [Sinkronisasi Data Destinasi](#sinkronisasi-data-destinasi)
-- [Kontribusi & Hak Cipta](#kontribusi--hak-cipta)
+- [Kontribusi & Kontak](#kontribusi--kontak)
 
 ---
 
 ## Diagram Alur Kerja
 
-Berikut adalah representasi alur pemrosesan data *end-to-end* dari pengunduhan hingga pembaruan dasbor:
+Pemrosesan data berjalan terjadwal dari pengunduhan hingga pembaruan dasbor WebGIS secara otomatis:
 
 ```mermaid
 graph TD
-    A[GCP Cloud Scheduler] -- "Request Trigger (POST)" --> B[GitHub Actions Runner]
+    A[GCP Cloud Scheduler] -- "POST Request (Trigger)" --> B[GitHub Actions Runner]
     B -- "Eksekusi main.py" --> C{Probe Check?}
     C -- "Data Batch Sudah Ada" --> D[Early Skip / Berhenti Bersih]
     C -- "Ada Data Baru / Run Manual" --> E[Request Data Prakiraan BMKG]
@@ -50,22 +53,22 @@ graph TD
 
 ## Tentang Proyek
 
-Sistem ini dikonfigurasi untuk berjalan di lingkungan **GitHub Actions dengan runner Windows (`windows-latest`)** karena pustaka perhitungan biometeorologi (`biometeo`) membutuhkan dependensi biner Fortran/C yang telah dikompilasi khusus untuk platform Windows. 
+Sistem ini dikonfigurasi untuk berjalan di lingkungan **GitHub Actions dengan runner Windows (`windows-latest`)** karena pustaka komputasi biometeorologi (`biometeo`) membutuhkan dependensi biner Fortran/C khusus platform Windows. 
 
-Pipeline ini berfungsi sebagai *backend* penyedia data untuk WebGIS, memastikan data kenyamanan termal terhitung secara periodik (setiap pergantian slot waktu BMKG) tanpa intervensi manual.
+Pipeline ini memproses prakiraan cuaca 3 harian dari BMKG untuk **49 destinasi wisata utama** di Provinsi Bali, menghitung suhu radiasi rerata (*Mean Radiant Temperature* / Tmrt), melakukan transformasi kekasaran kecepatan angin berdasarkan tinggi elevasi laut, mengklasifikasikan tingkat kenyamanan termal tubuh manusia, dan mengirimkan sinyal pembaruan data secara real-time ke aplikasi client WebGIS.
 
 ---
 
 ## Arsitektur & Struktur Direktori
 
-Repositori ini disusun menggunakan struktur paket Python standar (`src/`) agar modular, teruji, dan mudah dipelihara.
+Repositori ini ditata secara modular menggunakan struktur paket Python standar (`src/`):
 
 ```text
 action/
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml                  # CI otomatis saat push/PR ke branch main
-│       └── run-biometeo-worker.yml  # Definisi run-worker untuk produksi & manual
+│       └── run-biometeo-worker.yml  # Definisi workflow GHA produksi & manual
 ├── src/
 │   └── biometeo_worker/            # Paket program utama
 │       ├── __init__.py
@@ -76,172 +79,151 @@ action/
 │       ├── bmkg_client.py          # Client API prakiraan cuaca BMKG
 │       ├── classification.py       # Klasifikasi kenyamanan (Temperate & Sub-Tropic)
 │       ├── database.py             # Operasi database PostgreSQL & check batches
-│       ├── destinations.py         # Master data koordinat & elevasi 49 destinasi
-│       ├── destinations_source_db.py # Pengambilan konfigurasi destinasi dari DB
+│       ├── destinations.py         # Master data koordinat lokal 49 destinasi
+│       ├── destinations_source_db.py # Pemuatan konfigurasi destinasi dari database
 │       ├── preprocessing.py        # Normalisasi satuan & reduksi kecepatan angin
 │       └── storage.py              # Operasi upload arsip ke Supabase Storage (S3)
 ├── scripts/
 │   ├── smoke_test.py               # Pengujian cepat fungsionalitas biometeo
 │   ├── run_local.ps1               # Script PowerShell untuk eksekusi lokal
 │   └── sync_destinations_to_db.py  # Sinkronisasi master destinasi lokal ke DB
-├── reports/                        # Lokasi penyimpanan laporan & keluaran CSV runtime
+├── reports/                        # Penyimpanan laporan CSV hasil eksekusi lokal
 ├── tests/                          # Berkas pengujian unit (pytest)
-├── .env.example
-├── .gitignore
-├── pyproject.toml                  # Konfigurasi project & pytest
-├── README.md
-└── requirements.txt
+├── pyproject.toml                  # Konfigurasi proyek, pytest, & coverage
+└── requirements.txt                # Dependensi library Python
 ```
 
 ---
 
 ## Fitur Utama
 
-- **Pengecekan Batch Dini (Probe Check) & Ketahanan**:
-  - Sebelum mengunduh semua data, program melakukan request BMKG singkat untuk **3 desa sampel secara acak**.
-  - Mengecek status ke database untuk mengetahui ketersediaan batch tersebut di awal.
-  - Program tetap melanjutkan eksekusi penuh (mode *upsert* diaktifkan) untuk memutakhirkan data, tetapi log probe digunakan untuk mencatat ketersediaan batch.
-- **Dukungan Rerun Dinamis (Run 2/3 pada Batch yang Sama)**:
-  - Menyediakan kolom `updated_at` pada tabel `forecast_batches` yang secara otomatis diperbarui dengan `NOW()` jika batch dengan `produced_at` yang sama diimpor kembali. Hal ini memungkinkan sistem client WebGIS memantau perubahan data dan memuat ulang secara dinamis tanpa mengabaikan batch yang id-nya sama.
-- **Manajemen Status `is_latest` & Penanganan Slot Ulang (Retry Slots)**:
-  - Untuk menghindari pengiriman notifikasi/log duplikat pada slot eksekusi ulang, program hanya menetapkan status `is_latest = TRUE` jika data batch yang masuk memiliki timestamp `produced_at` yang secara kronologis lebih baru daripada batch aktif di database, atau jika bendera `set_latest` diset secara eksplisit.
-- **Komparasi Datetime Aman Zona Waktu (Timezone-Safe Comparison)**:
-  - Membandingkan secara aman objek datetime *timezone-aware* (dari string API BMKG) dengan *timezone-naive* (dari PostgreSQL/driver) tanpa memicu `TypeError`. Sistem secara cerdas menyelaraskan zona waktu sebelum melakukan perbandingan kronologis.
-- **Komputasi Kenyamanan Termal PET**: Integrasi perhitungan *Mean Radiant Temperature* (Tmrt) dan *Physiologically Equivalent Temperature* (PET) yang akurat.
-- **Normalisasi Data Cuaca**: Pengambilan otomatis data BMKG, penanganan format waktu (WITA/UTC), serta penyesuaian tinggi hembusan angin (*wind speed roughness translation*).
-- **Arsip Multi-Penyimpanan**: Hasil disimpan secara tabular di PostgreSQL untuk visualisasi dasbor, sekaligus diunggah dalam format CSV kompresi ke Supabase Storage (S3 compatible) sebagai arsip riset jangka panjang.
-- **Keamanan Kredensial**: Manajemen aman untuk seluruh parameter sensitif menggunakan integrasi *environment variables* lokal maupun GitHub Secrets.
+- **Pengecekan Batch Dini (Probe Check)**: Program mengirimkan request API BMKG singkat ke 3 desa sampel secara acak untuk membandingkan timestamp produksi (`produced_at`). Jika data tersebut sudah terbit di database, program akan berhenti bersih (*early skip*) untuk menghemat kuota eksekusi GitHub Actions.
+- **Dukungan Rerun Dinamis (Run 2/3)**: Menyediakan kolom `updated_at` pada tabel `forecast_batches` yang diperbarui secara dinamis jika batch dengan `produced_at` yang sama diimpor kembali. Memungkinkan client WebGIS memicu *auto-refresh* data di latar belakang.
+- **Manajemen Status `is_latest`**: Menjamin status `is_latest = TRUE` hanya disematkan pada data batch yang secara kronologis lebih baru dibandingkan batch aktif di database untuk menghindari notifikasi spam.
+- **Komparasi Datetime Aman Zona Waktu**: Secara cerdas menyelaraskan objek datetime *timezone-aware* (dari API BMKG) dengan *timezone-naive* (PostgreSQL) sebelum melakukan perbandingan kronologis.
+- **Transformasi Kecepatan Angin (Roughness)**: Menerapkan reduksi tinggi hembusan angin dari 10m standar BMKG ke tinggi sensorik kenyamanan manusia (1.2m) berdasarkan klasifikasi tutupan lahan lokal.
+- **Arsip Multi-Penyimpanan**: Menyimpan data tabular per jam ke database PostgreSQL (Supabase) untuk konsumsi REST API, sekaligus mengompres hasil run ke berkas `.csv.gz` dan mengunggahnya ke Supabase Storage (S3) untuk kepentingan riset masa depan.
 
 ---
 
-## Dependensi Utama
+## Spesifikasi Teknologi (Tech Stack)
 
-Detail pustaka utama yang digunakan dalam proyek ini (didefinisikan pada [requirements.txt](requirements.txt)):
-*   `biometeo==0.4.1`: Pustaka utama perhitungan parameter kenyamanan termal manusia (Tmrt dan PET).
-*   `pandas` & `numpy`: Pengolahan data tabular, interpolasi, dan kalkulasi matriks parameter cuaca.
-*   `psycopg2-binary`: Driver konektor PostgreSQL untuk operasi database.
-*   `boto3`: AWS SDK untuk Python yang digunakan untuk mengunggah arsip ke Supabase Storage via protokol S3.
-*   `pytest` & `pytest-html`: Framework pengujian unit beserta pembuat laporan pengujian HTML.
-
----
-
-## Prasyarat (Prerequisites)
-
-Untuk menjalankan proyek ini secara lokal, Anda memerlukan:
-- Perangkat dengan Sistem Operasi **Windows** (karena pustaka biner `biometeo` membutuhkan compiler Windows runtime).
-- **Python 3.10** ke atas terinstal di sistem.
+*   **Pustaka Inti Biometeorologi**: `biometeo v0.4.1` (Kompilasi Fortran/C untuk Windows)
+*   **Manipulasi & Analisis Data**: `pandas v2.2` & `numpy v2.0`
+*   **Akses Database PostgreSQL**: `psycopg2-binary v2.9`
+*   **Konektor S3 Cloud Storage**: `boto3 v1.34` & `botocore v1.34`
+*   **Kerangka Pengujian Unit**: `pytest v8.3` & `pytest-cov v5.0` & `pytest-html v4.1`
 
 ---
 
 ## Panduan Instalasi & Penggunaan
 
-1. **Aktifkan Virtual Environment Python**:
-   ```powershell
-   python -m venv .venv
-   .venv\Scripts\Activate.ps1
-   ```
+### 1. Prasyarat
+*   Perangkat bersistem operasi **Windows** (karena pustaka biner `biometeo` dikompilasi untuk runtime Windows).
+*   **Python 3.12** ke atas.
 
-2. **Pasang dependensi package**:
-   ```powershell
-   pip install -r requirements.txt
-   ```
+### 2. Instalasi Proyek
+Masuk ke folder `action` lalu buat virtual environment dan pasang dependensi:
+```powershell
+cd action
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
 
-3. **Konfigurasi Environment**:
-   Salin file `.env.example` menjadi `.env` dan lengkapi nilainya:
+### 3. Konfigurasi Environment
+Salin berkas `.env.example` menjadi `.env` di folder root `action/` dan lengkapi nilainya:
+```env
+DATABASE_URL=postgresql://postgres:password@db.supabase.co:5432/postgres
+S3_ENDPOINT_URL=https://proyek-anda.supabase.co/storage/v1/s3
+S3_ACCESS_KEY_ID=access_key_supabase_anda
+S3_SECRET_ACCESS_KEY=secret_access_key_supabase_anda
+S3_BUCKET_NAME=pet_analysis
+APP_ENV=dev
+KEEP_LOCAL_ARTIFACTS=true
+OUTPUT_PARENT_DIR=reports
+```
 
-   | Variabel | Deskripsi | Default / Status |
-   |---|---|---|
-   | `DATABASE_URL` | URI koneksi utama PostgreSQL/Supabase | *Wajib* |
-   | `S3_ENDPOINT_URL` | URL endpoint S3 Supabase Storage | *Wajib* |
-   | `S3_ACCESS_KEY_ID` | Access Key ID untuk S3 storage | *Wajib* |
-   | `S3_SECRET_ACCESS_KEY` | Secret Access Key untuk S3 storage | *Wajib* |
-   | `S3_BUCKET_NAME` | Nama bucket tempat penyimpanan arsip | `pet_analysis` |
-   | `APP_ENV` | Mode runtime aplikasi (`dev` atau `prod`) | `dev` |
-   | `KEEP_LOCAL_ARTIFACTS`| Menyimpan arsip keluaran lokal setelah run | `true` |
-   | `OUTPUT_PARENT_DIR` | Folder utama penyimpanan laporan lokal | `reports` |
+### 4. Eksekusi Lokal
+Jalankan skrip pembantu PowerShell untuk mulai memproses data prakiraan cuaca secara instan:
+```powershell
+.\scripts\run_local.ps1
+```
+*Catatan: Skrip ini secara otomatis memformat `PYTHONPATH` dan menjalankan slot waktu `manual`.*
 
-4. **Jalankan Pipeline secara Lokal**:
-   Eksekusi program secara langsung menggunakan pembantu PowerShell:
-   ```powershell
-   .\scripts\run_local.ps1
-   ```
-   *Catatan: Skrip ini secara otomatis memformat `PYTHONPATH=src` dan menjalankan CLI utama pada slot `manual`.*
+Untuk kustomisasi manual, Anda bisa menggunakan perintah interpreter Python secara langsung dengan parameter CLI berikut:
+```powershell
+# Jalankan slot waktu pagi (morning) dengan membatasi hanya 5 desa pertama
+.venv\Scripts\python.exe -m biometeo_worker.main --slot morning --max-villages 5
 
-   Opsi parameter CLI tambahan pada `main.py`:
-   - `--slot [morning|evening|manual]`: Menentukan slot waktu eksekusi run.
-   - `--trigger-source [02:15|14:15|...|manual]`: Menentukan sumber pemicu scheduler untuk mengontrol aktivasi status `is_latest` (default: `manual`).
-   - `--dry-run`: Menghitung data dan menulis file lokal tanpa mengunggah ke DB atau S3.
-   - `--skip-db`: Melewati proses unggah data ke database PostgreSQL.
-   - `--skip-storage`: Melewati proses unggah file arsip CSV ke S3 Storage.
-   - `--max-villages [N]`: Membatasi pengolahan data hanya untuk N desa pertama (sangat berguna untuk debugging cepat).
+# Jalankan pengujian kering (dry-run) tanpa menulis data ke database Supabase maupun S3
+.venv\Scripts\python.exe -m biometeo_worker.main --slot manual --dry-run
+```
+
+Opsi parameter CLI tambahan pada `main.py`:
+*   `--slot [morning|evening|manual]`: Menentukan slot waktu eksekusi run.
+*   `--trigger-source [02:15|14:15|...|manual]`: Menentukan sumber pemicu scheduler untuk mengontrol aktivasi status `is_latest` (default: `manual`).
+*   `--dry-run`: Menghitung data dan menulis file lokal tanpa mengunggah ke DB atau S3.
+*   `--skip-db`: Melewati proses unggah data ke database PostgreSQL.
+*   `--skip-storage`: Melewati proses unggah file arsip CSV ke S3 Storage.
+*   `--max-villages [N]`: Membatasi pengolahan data hanya untuk N desa pertama (sangat berguna untuk debugging cepat).
 
 ---
 
-## Pengujian & Verifikasi
+## Pengujian & Penjaminan Kualitas (Testing)
 
-Pengujian pada repositori ini dibagi menjadi dua tingkat pengujian otomatis:
+Aplikasi pipeline backend dilengkapi dengan dua tingkat verifikasi otomatis:
 
 ### 1. Pengujian Unit (Pytest)
 Menguji logika modul independen seperti kalkulasi normalisasi cuaca, skema database, pemecah string tanggal, penentu kategori kenyamanan, validasi respons API BMKG, dan status aktivasi batch terbaru.
-```powershell
-# Menjalankan seluruh pengujian unit dan otomatis membuat laporan hasil uji & cakupan kode HTML
-.\.venv\Scripts\python.exe -m pytest
-```
-Menjalankan perintah di atas akan secara otomatis menghasilkan dua laporan visual sekaligus di bawah folder `reports/`:
-1. **`reports/pytest-report.html`**: Laporan hasil eksekusi pengujian skenario unit (102 passed).
-2. **`reports/coverage-report/index.html`**: Laporan interaktif cakupan kode (*code coverage*) per berkas yang mendokumentasikan pernyataan **100% statement coverage (927/927 statements)** untuk ke-11 modul inti `biometeo_worker`.
+*   **Cakupan**: **102 skenario pengujian** dengan **100% Code Coverage (927/927 statements)** lengkap untuk seluruh berkas di bawah `biometeo_worker`.
+*   **Perintah menjalankan tes**:
+    ```powershell
+    # Jalankan pengujian unit (otomatis membuat laporan kelulusan & cakupan visual HTML)
+    .venv\Scripts\python.exe -m pytest
+    ```
+*   **Laporan Hasil Uji (Visual HTML)**:
+    Menjalankan tes akan secara otomatis memproduksi dua berkas laporan di bawah folder `reports/`:
+    1.  **`reports/pytest-report.html`**: Laporan status hasil eksekusi pengujian skenario unit (Lulus).
+    2.  **`reports/coverage-report/index.html`**: Laporan interaktif cakupan kode (*code coverage*) per berkas yang menampilkan baris teruji dan yang dilewati.
 
-Daftar file pengujian unit:
-- **`test_database_datetime_comparison.py`**: Memverifikasi penanganan timezone-naive vs timezone-aware saat komparasi `produced_at` serta memastikan logika aktivasi `is_latest` berfungsi dengan benar untuk menghindari notifikasi duplikat pada retry slot.
-- **`test_database_queries.py`**: Menguji modul kueri database PostgreSQL (`database.py` dan `destinations_source_db.py`) termasuk pemuatan konfigurasi destinasi dan manipulasi data.
-- **`test_bmkg_client.py`**: Memverifikasi pemrosesan dan validasi respons JSON dari API BMKG, termasuk simulasi retries saat koneksi timeout atau gagal.
-- **`test_preprocessing.py`**: Memvalidasi konversi unit cuaca (kecepatan angin, persentase tutupan awan ke oktas) dan validitas data RH/suhu.
-- **`test_classification.py`**: Memverifikasi batas klasifikasi kenyamanan termal PET untuk standar beriklim sedang (temperate) dan sub-tropis.
-- **`test_config_and_runtime.py`**: Menguji konfigurasi CLI arguments, pembebanan environment variables, dan validasi status prod/dev.
-- **`test_storage_and_destinations_db.py`**: Memvalidasi kelengkapan konfigurasi destinasi wisata dan fungsi helper content-type S3 upload.
-- **`test_logger.py`**: Memverifikasi inisialisasi logger terstandarisasi.
-- **`test_storage.py`**: Menguji pengunggahan artefak folder run ke Supabase Storage (S3-compatible) menggunakan mock boto3 client.
-- **`test_main_flow.py`**: Orkestrasi penuh pengujian pipeline pada `main.py` mencakup seluruh percabangan dry-run, skip-db, skip-storage, parsial-sukses, kegagalan unggah, dan logika probe check.
-
-
-
-### 2. Smoke Test
-Memverifikasi fungsionalitas dasar komputasi `biometeo` dan integritas modul worker dalam hitungan milidetik. Uji coba ini dijalankan secara otomatis di runner GitHub Actions sebelum pengujian lainnya:
-```powershell
-python scripts/smoke_test.py
-```
-Smoke test memverifikasi:
-- Pustaka biner `biometeo` berhasil di-import tanpa error runtime C.
-- Fungsi komputasi inti (`Tmrt_calc` dan `mPET`) menghasilkan output matematis yang valid.
-- Struktur internal program `biometeo_worker` terstruktur dengan benar.
+### 2. Pengujian Asap (Smoke Test)
+Memverifikasi fungsionalitas dasar komputasi biner `biometeo` dan integritas modul worker dalam hitungan milidetik.
+*   **Perintah menjalankan tes**:
+    ```powershell
+    .venv\Scripts\python.exe scripts/smoke_test.py
+    ```
+*   Smoke test memverifikasi:
+    *   Pustaka biner `biometeo` berhasil di-import tanpa error runtime C.
+    *   Fungsi komputasi inti (`Tmrt_calc` dan `mPET`) menghasilkan output matematis yang valid.
+    *   Struktur internal program `biometeo_worker` terstruktur dengan benar.
 
 ---
 
-## Pemicu Jadwal Eksternal (GCP)
+## Orkestrasi GCP Cloud Scheduler
 
-Untuk menghemat kuota eksekusi dan meningkatkan keandalan kontrol penjadwalan, repositori ini **tidak menggunakan cron scheduler bawaan GitHub Actions**.
+Untuk menghemat kuota eksekusi dan meningkatkan keandalan kontrol penjadwalan, proyek ini **tidak menggunakan cron scheduler bawaan GitHub Actions**.
 
-Sebagai gantinya, jadwal eksekusi produksi pagi & sore diorkestrasi secara eksternal (menggunakan **GCP Cloud Scheduler**). Penjadwal tersebut mengirimkan request HTTP POST ke REST API GitHub (`/repos/{owner}/{repo}/actions/workflows/run-biometeo-worker.yml/dispatches`) dengan autentikasi Token PAT dan input parameter `slot` yang sesuai.
+Sebagai gantinya, jadwal eksekusi produksi pagi & sore diorkestrasi secara eksternal menggunakan **GCP Cloud Scheduler**:
+*   Penjadwal GCP mengirimkan request HTTP POST ke REST API GitHub (`/repos/{owner}/{repo}/actions/workflows/run-biometeo-worker.yml/dispatches`) secara terjadwal (pukul 02:15 UTC & 14:15 UTC).
+*   Request diautentikasi menggunakan Token PAT (Personal Access Token) dengan menyematkan input parameter `slot` yang sesuai (`morning` atau `evening`).
 
 ---
 
 ## Sinkronisasi Data Destinasi
 
-Jika terdapat pembaruan data koordinat, nama destinasi, atau tinggi elevasi laut pada konfigurasi lokal di [destinations.py](src/biometeo_worker/destinations.py), data tersebut harus disinkronkan ke database menggunakan perintah:
-
+Jika terdapat pembaruan data koordinat, nama destinasi, atau tinggi elevasi laut pada konfigurasi lokal di [destinations.py](src/biometeo_worker/destinations.py), data tersebut harus disinkronkan ke database PostgreSQL Supabase menggunakan skrip berikut:
 ```powershell
-$env:PYTHONPATH="src"
-python -m scripts.sync_destinations_to_db
+.venv\Scripts\python.exe -m scripts.sync_destinations_to_db
 ```
 Tambahkan bendera `--dry-run` untuk memverifikasi perubahan dan melakukan simulasi (rollback otomatis) sebelum perubahan permanen diterapkan di database.
 
 ---
 
-## Kontribusi & Hak Cipta
+## Kontribusi & Kontak
 
-Proyek ini bersifat **private** (tertutup). Seluruh hak cipta dilindungi oleh penulis dan Sekolah Tinggi Meteorologi Klimatologi dan Geofisika (STMKG). 
+Proyek ini bersifat tertutup (private) untuk kepentingan Tugas Akhir. Hubungi penulis apabila memiliki pertanyaan terkait sistem ini:
 
-Hubungi penulis jika ada pertanyaan lebih lanjut terkait penelitian ini:
 *   **Nama**: Ahmad Meijlan Yasir
 *   **Email**: yasirahmad220504@gmail.com
 *   **Instansi**: Sekolah Tinggi Meteorologi Klimatologi dan Geofisika (STMKG), Tangerang.
