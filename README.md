@@ -4,7 +4,7 @@ Pipeline data otomatis berbasis Python untuk mengunduh prakiraan cuaca wilayah B
 
 Proyek ini dikembangkan sebagai bagian dari penelitian Tugas Akhir (Skripsi) di **Sekolah Tinggi Meteorologi Klimatologi dan Geofisika (STMKG)**.
 
-[![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python&logoColor=white)](https://python.org)
+[![Python](https://img.shields.io/badge/Python-3.10+-blue?logo=python&logoColor=white)](https://python.org)
 [![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-Windows_Runner-blue?logo=githubactions&logoColor=white)](https://github.com/features/actions)
 [![GCP Cloud Scheduler](https://img.shields.io/badge/GCP-Cloud_Scheduler-blue?logo=googlecloud&logoColor=white)](https://cloud.google.com/scheduler)
 [![Pytest](https://img.shields.io/badge/Pytest-102%20Passed-green?logo=pytest&logoColor=white)](https://pytest.org)
@@ -56,7 +56,7 @@ graph TD
 
 Sistem ini dikonfigurasi untuk berjalan di lingkungan **GitHub Actions dengan runner Windows (`windows-latest`)** karena pustaka komputasi biometeorologi (`biometeo`) membutuhkan dependensi biner Fortran/C khusus platform Windows. 
 
-Pipeline ini memproses prakiraan cuaca 3 harian dari BMKG untuk **49 destinasi wisata utama** di Provinsi Bali, menghitung suhu radiasi rerata (*Mean Radiant Temperature* / Tmrt), melakukan transformasi kekasaran kecepatan angin berdasarkan tinggi elevasi laut, mengklasifikasikan tingkat kenyamanan termal tubuh manusia, dan mengirimkan sinyal pembaruan data secara real-time ke aplikasi client WebGIS.
+Pipeline ini memproses prakiraan cuaca 3 harian dari BMKG untuk **49 destinasi wisata utama** di Provinsi Bali, menghitung suhu radiasi rerata (*Mean Radiant Temperature* / Tmrt), melakukan reduksi tinggi kecepatan angin dari 10m ke 1.1m, mengklasifikasikan tingkat kenyamanan termal tubuh manusia, dan mengirimkan sinyal pembaruan data secara real-time ke aplikasi client WebGIS.
 
 ---
 
@@ -102,7 +102,7 @@ action/
 - **Dukungan Rerun Dinamis (Run 2/3)**: Menyediakan kolom `updated_at` pada tabel `forecast_batches` yang diperbarui secara dinamis jika batch dengan `produced_at` yang sama diimpor kembali. Memungkinkan client WebGIS memicu *auto-refresh* data di latar belakang.
 - **Manajemen Status `is_latest`**: Menjamin status `is_latest = TRUE` hanya disematkan pada data batch yang secara kronologis lebih baru dibandingkan batch aktif di database untuk menghindari notifikasi spam.
 - **Komparasi Datetime Aman Zona Waktu**: Secara cerdas menyelaraskan objek datetime *timezone-aware* (dari API BMKG) dengan *timezone-naive* (PostgreSQL) sebelum melakukan perbandingan kronologis.
-- **Transformasi Kecepatan Angin (Roughness)**: Menerapkan reduksi tinggi hembusan angin dari 10m standar BMKG ke tinggi sensorik kenyamanan manusia (1.2m) berdasarkan klasifikasi tutupan lahan lokal.
+- **Transformasi Kecepatan Angin (Roughness)**: Menerapkan reduksi tinggi hembusan angin dari 10m standar BMKG ke tinggi sensorik kenyamanan manusia (1.1m) menggunakan koefisien kekasaran tetap ($\alpha = 0.2$) atau pustaka komputasi `biometeo`.
 - **Arsip Multi-Penyimpanan**: Menyimpan data tabular per jam ke database PostgreSQL (Supabase) untuk konsumsi REST API, sekaligus mengompres hasil run ke berkas `.csv.gz` dan mengunggahnya ke Supabase Storage (S3) untuk kepentingan riset masa depan.
 
 ---
@@ -121,7 +121,7 @@ action/
 
 ### 1. Prasyarat
 *   Perangkat bersistem operasi **Windows** (karena pustaka biner `biometeo` dikompilasi untuk runtime Windows).
-*   **Python 3.12** ke atas.
+*   **Python 3.10** ke atas.
 
 ### 2. Instalasi Proyek
 Masuk ke folder `action` lalu buat virtual environment dan pasang dependensi:
