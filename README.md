@@ -37,8 +37,9 @@ Pemrosesan data berjalan terjadwal dari pengunduhan hingga pembaruan dasbor WebG
 graph TD
     A[GCP Cloud Scheduler] -- "POST Request (Trigger)" --> B[GitHub Actions Runner]
     B -- "Eksekusi main.py" --> C{Probe Check?}
-    C -- "Data Batch Sudah Ada" --> D[Early Skip / Berhenti Bersih]
-    C -- "Ada Data Baru / Run Manual" --> E[Request Data Prakiraan BMKG]
+    C -- "Data Sudah Ada" --> D[Melanjutkan dengan Mode Upsert]
+    C -- "Ada Data Baru" --> E[Request Data Prakiraan BMKG]
+    D --> E
     E --> F[Preprocessing Data Cuaca]
     F --> G["Hitung mPET & Tmrt (biometeo)"]
     G --> H[Klasifikasi Kenyamanan PET]
@@ -97,7 +98,7 @@ action/
 
 ## Fitur Utama
 
-- **Pengecekan Batch Dini (Probe Check)**: Program mengirimkan request API BMKG singkat ke 3 desa sampel secara acak untuk membandingkan timestamp produksi (`produced_at`). Jika data tersebut sudah terbit di database, program akan berhenti bersih (*early skip*) untuk menghemat kuota eksekusi GitHub Actions.
+- **Pengecekan Batch Dini (Probe Check)**: Program mengirimkan request API BMKG singkat ke 3 desa sampel secara acak untuk membandingkan timestamp produksi (`produced_at`). Jika data tersebut sudah terdaftar di database, sistem akan mencatatnya dan tetap melanjutkan pipeline dalam mode *upsert* untuk menjamin redundansi dan pembaruan data secara aman.
 - **Dukungan Rerun Dinamis (Run 2/3)**: Menyediakan kolom `updated_at` pada tabel `forecast_batches` yang diperbarui secara dinamis jika batch dengan `produced_at` yang sama diimpor kembali. Memungkinkan client WebGIS memicu *auto-refresh* data di latar belakang.
 - **Manajemen Status `is_latest`**: Menjamin status `is_latest = TRUE` hanya disematkan pada data batch yang secara kronologis lebih baru dibandingkan batch aktif di database untuk menghindari notifikasi spam.
 - **Komparasi Datetime Aman Zona Waktu**: Secara cerdas menyelaraskan objek datetime *timezone-aware* (dari API BMKG) dengan *timezone-naive* (PostgreSQL) sebelum melakukan perbandingan kronologis.
