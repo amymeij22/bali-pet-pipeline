@@ -30,7 +30,7 @@ def cloud_percent_to_oktas(cloud_cover_percent: float) -> float:
 
 
 def ws_kmh_to_ms_10m(ws_kmh: float) -> float:
-    """BMKG ws dalam km/jam -> m/s pada ketinggian referensi 10 m (asumsi skrip lama: /3.6)."""
+    """BMKG ws dalam km/jam -> m/s pada ketinggian referensi 10 m."""
     return float(ws_kmh) / 3.6
 
 
@@ -42,7 +42,7 @@ def wind_10m_ms_to_1_1m_ms(ws_10m_ms: float, alpha: float = 0.2) -> tuple[float,
     Mengembalikan (v_1_1m_ms, method_note).
     """
     if biometeo is None:
-        # Paket biometeo tidak terpasang: gunakan fallback power law (bukan sumber utama di produksi).
+        # Fallback jika biometeo tidak terpasang
         v = ws_10m_ms * ((1.1 / 10.0) ** alpha)
         return v, "fallback_power_law_no_biometeo_import"
 
@@ -83,7 +83,7 @@ def wind_10m_ms_to_1_1m_ms(ws_10m_ms: float, alpha: float = 0.2) -> tuple[float,
             if math.isnan(v) or math.isinf(v):
                 raise ValueError(f"v1m_cal menghasilkan non-finite: {v}")
             return v, f"biometeo.v1m_cal:{name}"
-        except Exception as e:  # noqa: BLE001 - kita coba variasi pemanggilan
+        except Exception as e:  # noqa: BLE001
             last_err = e
             continue
 
@@ -143,7 +143,7 @@ def preprocess_bmkg_record(
     ws_10m_ms = ws_kmh_to_ms_10m(ws_kmh)
     v_1_1m, wind_method = wind_10m_ms_to_1_1m_ms(ws_10m_ms)
     if v_1_1m == 0.0:
-        # Stabilitas numerik PET (bukan mengubah metodologi BMKG)
+        # Stabilitas numerik PET
         v_1_1m = 0.1
         wind_method += "+min0.1ms"
 

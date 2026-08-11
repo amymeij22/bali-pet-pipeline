@@ -113,8 +113,7 @@ def build_grp_and_exports(
 
     for _, row in grp.iterrows():
         kdep = str(row["kdepum_code"])
-        # Jika pipeline sudah diperluas per destinasi (destination_name ada di baris),
-        # gunakan itu. Jika tidak, fallback ke ekspansi berdasarkan kdepum.
+        # Ekspansi destinasi
         row_dest = _series_val(row, "destination_name", default="")
         if row_dest:
             dests = [str(row_dest)]
@@ -319,8 +318,7 @@ def main(argv: list[str] | None = None) -> int:
 
     started = datetime.now(timezone.utc)
 
-    # Source-of-truth konfigurasi destinasi adalah database.
-    # Fallback ke `destinations.py` bila dry-run (tanpa DB) atau query DB gagal.
+    # Load konfigurasi destinasi
     destinations: list[DestinationConfig] = []
     if args.dry_run:
         destinations = DESTINATIONS
@@ -406,8 +404,7 @@ def main(argv: list[str] | None = None) -> int:
     folder_ts = _safe_folder_ts(produced_at)
     run_name = f"pet_analysis_{folder_ts}"
 
-    # Dev: simpan artefak ke OUTPUT_PARENT_DIR (atau --output-dir).
-    # Prod: default tidak menyimpan artefak lokal; tulis ke temporary dir lalu upload ke storage.
+    # Tentukan direktori penyimpanan
     keep_local = args.dry_run or settings.keep_local_artifacts or (settings.app_env not in {"prod", "production"})
     parent = args.output_dir or settings.output_parent_dir
 
@@ -443,8 +440,7 @@ def main(argv: list[str] | None = None) -> int:
         pre_df = pd.DataFrame(preprocessed)
 
         bio_rows: list[dict[str, Any]] = []
-        # Lazy import agar unit test / tooling bisa import main.py tanpa biometeo terpasang.
-        # Pipeline produksi tetap akan gagal lebih awal saat benar-benar membutuhkan biometeo.
+        # Lazy import biometeo_engine
         from biometeo_worker.biometeo_engine import calculate_biometeo_outputs  # noqa: WPS433
 
         for pr in preprocessed:
@@ -489,7 +485,7 @@ def main(argv: list[str] | None = None) -> int:
             bio_df, kdep_to_dests, produced_at, include_db_rows=False
         )
 
-        # Output standar (selalu): 3 CSV inti + file error bila ada
+        # Simpan arsip CSV
         raw_legacy_df.to_csv(os.path.join(run_dir, "raw_data.csv"), index=False)
         proc_df.to_csv(os.path.join(run_dir, "processed_data.csv"), index=False)
         final_df.to_csv(os.path.join(run_dir, "final_forecast_data.csv"), index=False)

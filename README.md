@@ -199,6 +199,9 @@ Memverifikasi fungsionalitas dasar komputasi biner `biometeo` dan integritas mod
     *   Fungsi komputasi inti (`Tmrt_calc` dan `mPET`) menghasilkan output matematis yang valid.
     *   Struktur internal program `biometeo_worker` terstruktur dengan benar.
 
+### 3. Pemeliharaan Kode (Code Maintenance)
+Seluruh komentar dan dokumentasi di dalam kode program disederhanakan agar ringkas, bersih, dan bebas dari komentar berlebihan yang redundan (AI-generated). Hal ini dilakukan untuk menjaga keterbacaan kode dengan tetap mempertahankan fungsionalitas logika 100%.
+
 ---
 
 ## Orkestrasi GCP Cloud Scheduler

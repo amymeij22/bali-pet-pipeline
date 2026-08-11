@@ -94,7 +94,7 @@ def import_forecast_batch(
         log.warning("Gagal introspect kolom weather_forecasts (lanjut minimal): %s", e)
 
     try:
-        # Cek apakah batch sudah terdaftar sebelumnya untuk mendeteksi batch baru (resilience)
+        # Cek status batch
         cur.execute("SELECT id, is_latest FROM public.forecast_batches WHERE produced_at = %s", (produced_at,))
         batch_row = cur.fetchone()
         is_new_batch = batch_row is None
@@ -118,7 +118,7 @@ def import_forecast_batch(
             is_new_batch,
         )
 
-        # Ambil data forecast yang sudah ada di database untuk batch_id ini
+        # Ambil data forecast eksis
         cur.execute(
             """
             SELECT destination_id, forecast_time::text, temperature, humidity, wind_speed, pet_value
@@ -138,7 +138,7 @@ def import_forecast_batch(
         cur.execute("SELECT kdepum_code, id FROM public.villages")
         v_map = {r[0]: r[1] for r in cur.fetchall()}
 
-        # (kdepum_code, destination_name) -> destination_id
+        # Mapping kdepum & destinasi ke ID
         cur.execute(
             """
             SELECT v.kdepum_code, d.destination_name, d.id
@@ -174,7 +174,7 @@ def import_forecast_batch(
             if r.sub_tropic_category_key and sid is None:
                 missing_c.add(r.sub_tropic_category_key)
 
-            # Optimasi penyaringan: lewati data yang sudah ada dan nilainya persis sama
+            # Skip jika data identik
             ftime = r.forecast_time
             ftime_clean = ftime.split('+')[0].replace(' ', 'T')
             existing = existing_map.get((did, ftime_clean))
@@ -232,7 +232,7 @@ def import_forecast_batch(
             log.error("Tidak ada tuple valid untuk insert; rollback")
             return 0
 
-        # dedupe key (destination, batch, time)
+        # Deduplikasi key
         dedup: dict[tuple[Any, Any, Any], tuple[Any, ...]] = {}
         for t in tuples:
             dedup[(t[0], t[1], t[2])] = t
@@ -292,7 +292,7 @@ def import_forecast_batch(
         else:
             log.info("DB execute: Semua %s baris forecast dilewati karena sudah ada di database dengan nilai yang sama", len(rows))
 
-        # Tentukan apakah batch ini lebih baru daripada batch yang saat ini ditandai sebagai latest
+        # Bandingkan kemutakhiran batch
         cur.execute("SELECT produced_at FROM public.forecast_batches WHERE is_latest = TRUE LIMIT 1")
         latest_row = cur.fetchone()
         
@@ -302,11 +302,11 @@ def import_forecast_batch(
             from datetime import datetime
             try:
                 incoming_dt = datetime.fromisoformat(produced_at.replace("Z", "+00:00"))
-                # Penanganan perbandingan tz-aware vs tz-naive
+                # Normalisasi timezone
                 compare_incoming = incoming_dt.replace(tzinfo=None) if current_latest_produced_at.tzinfo is None else incoming_dt
                 compare_latest = current_latest_produced_at.replace(tzinfo=None) if incoming_dt.tzinfo is None else current_latest_produced_at
                 
-                # Double safety: jika salah satu tetap berbeda tipe, paksa keduanya naive
+                # Samakan timezone status
                 if compare_incoming.tzinfo is not None and compare_latest.tzinfo is None:
                     compare_incoming = compare_incoming.replace(tzinfo=None)
                 elif compare_incoming.tzinfo is None and compare_latest.tzinfo is not None:
@@ -317,7 +317,7 @@ def import_forecast_batch(
             except Exception as e:
                 log.warning("Gagal membandingkan produced_at: %s", e)
         else:
-            # Jika belum ada batch sama sekali di DB, maka batch baru otomatis dianggap lebih baru
+            # Fallback jika belum ada batch
             is_newer_than_current = True
 
         should_activate = set_latest or is_newer_than_current

@@ -37,7 +37,6 @@ def extract_biometeo_value(result: Any, keys: list[str]) -> float:
     last_err: Exception | None = None
 
     for key in keys:
-        # dict-like
         if isinstance(result, dict) and key in result:
             try:
                 v = float(result[key])
@@ -47,7 +46,6 @@ def extract_biometeo_value(result: Any, keys: list[str]) -> float:
             except Exception as e:  # noqa: BLE001
                 last_err = e
 
-        # attribute
         if hasattr(result, key):
             try:
                 v = float(getattr(result, key))
@@ -57,7 +55,6 @@ def extract_biometeo_value(result: Any, keys: list[str]) -> float:
             except Exception as e:  # noqa: BLE001
                 last_err = e
 
-    # tuple/list: coba indeks 0/1 untuk (Tmrt, VP) atau sejenis
     if isinstance(result, (list, tuple)):
         for i in (0, 1):
             if len(result) > i:
@@ -80,8 +77,6 @@ def extract_tmrt_vp(tmrt_result: Any) -> tuple[float, float]:
 
 
 def extract_pet(pet_result: Any) -> float:
-    # biometeo==0.4.1 mengembalikan key utama: 'PET_v'
-    # tetap dukung key alternatif untuk kompatibilitas kecil.
     return extract_biometeo_value(pet_result, ["PET_v", "PET", "pet", "Pet"])
 
 
