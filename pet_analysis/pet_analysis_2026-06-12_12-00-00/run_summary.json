@@ -1,0 +1,17 @@
+{
+  "produced_at": "2026-06-12T12:00:00",
+  "started_at": "2026-06-12T16:17:11.801824+00:00",
+  "finished_at": "2026-06-12T16:18:13.652581+00:00",
+  "duration_seconds": 61.850757,
+  "total_unique_villages": 45,
+  "success_villages": 45,
+  "failed_villages": 0,
+  "total_records_raw": 855,
+  "total_records_valid": 931,
+  "total_records_inserted": 387,
+  "total_records_skipped": 0,
+  "forecast_start": "2026-06-12 16:00:00",
+  "forecast_end": "2026-06-14 23:00:00",
+  "biometeo_version": "0.4.1",
+  "status": "success"
+}

@@ -1,0 +1,17 @@
+{
+  "produced_at": "2026-07-01T00:00:00",
+  "started_at": "2026-07-01T04:16:34.195119+00:00",
+  "finished_at": "2026-07-01T04:17:26.135509+00:00",
+  "duration_seconds": 51.94039,
+  "total_unique_villages": 45,
+  "success_villages": 45,
+  "failed_villages": 0,
+  "total_records_raw": 900,
+  "total_records_valid": 980,
+  "total_records_inserted": 300,
+  "total_records_skipped": 0,
+  "forecast_start": "2026-07-01 04:00:00",
+  "forecast_end": "2026-07-03 14:00:00",
+  "biometeo_version": "0.4.1",
+  "status": "success"
+}

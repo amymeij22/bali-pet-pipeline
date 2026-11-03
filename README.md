@@ -17,6 +17,7 @@ Proyek ini dikembangkan sebagai bagian dari penelitian Tugas Akhir (Skripsi) di 
 - [Diagram Alur Kerja](#diagram-alur-kerja)
 - [Tentang Proyek](#tentang-proyek)
 - [Arsitektur & Struktur Direktori](#arsitektur--struktur-direktori)
+- [Data untuk Reproduksi Penelitian](#data-untuk-reproduksi-penelitian)
 - [Fitur Utama](#fitur-utama)
 - [Spesifikasi Teknologi (Tech Stack)](#spesifikasi-teknologi-tech-stack)
 - [Panduan Instalasi & Penggunaan](#panduan-instalasi--penggunaan)
@@ -70,6 +71,7 @@ action/
 │   └── workflows/
 │       ├── ci.yml                  # CI otomatis saat push/PR ke branch main
 │       └── run-biometeo-worker.yml  # Definisi workflow GHA produksi & manual
+├── pet_analysis/                   # Arsip data riil untuk reproduksi penelitian (7 Juni – 6 Juli 2026)
 ├── src/
 │   └── biometeo_worker/            # Paket program utama
 │       ├── __init__.py
@@ -93,6 +95,25 @@ action/
 ├── pyproject.toml                  # Konfigurasi proyek, pytest, & coverage
 └── requirements.txt                # Dependensi library Python
 ```
+
+---
+
+## Data untuk Reproduksi Penelitian
+
+Untuk keperluan transparansi, verifikasi ilmiah, dan reproduksi komputasi penelitian Tugas Akhir, repositori ini menyertakan arsip data hasil kalkulasi dan klasifikasi kenyamanan termal PET pada folder [`pet_analysis/`](pet_analysis/).
+
+Data yang tersedia mencakup rentang waktu satu bulan operasional:
+- **Rentang Waktu Batch Produksi**: **7 Juni 2026 s.d. 6 Juli 2026**
+  - **Batch Paling Awal**: `pet_analysis_2026-06-07_00-00-00` (7 Juni 2026, 00:00:00 UTC)
+  - **Batch Paling Akhir**: `pet_analysis_2026-07-06_12-00-00` (6 Juli 2026, 12:00:00 UTC / jangkauan prakiraan cuaca hingga 8 Juli 2026, 23:00:00 UTC)
+- **Total Batch Tersimpan**: 57 batch komputasi
+- **Struktur Berkas pada Setiap Folder Batch**:
+  - `raw_data.csv`: Data mentah parameter cuaca hasil scraping API BMKG untuk seluruh destinasi wisata.
+  - `processed_data.csv`: Data cuaca hasil pra-pemrosesan, normalisasi parameter, dan penyesuaian kecepatan angin ke level 1.1 m.
+  - `final_forecast_data.csv`: Hasil komputasi parameter biometeorologi (`Tmrt`, `mPET`, dan `PET`).
+  - `pet_classification.csv` / `run_summary.json`: Hasil klasifikasi kategori kenyamanan termal dan ringkasan eksekusi batch.
+
+Data ini dapat digunakan untuk mereplikasi kalkulasi, menganalisis variabilitas termal di destinasi wisata Bali, maupun memvalidasi keluaran sistem tanpa perlu melakukan query ulang ke API BMKG historis.
 
 ---
 
